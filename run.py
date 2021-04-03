@@ -1,1 +1,50 @@
-print("Swish swoosh your images are now colored")
+import tensorflow as tf
+import argparse
+import gc
+import subprocess
+import os
+from datetime import datetime
+from model import DeOldify
+
+def parse_args():
+    argParser = argparse.ArgumentParser(description='Train a generative adversarial network model from scratch, continue training from a snapshot or run model on given black and white image.')
+    argParser.add_argument('-i', dest='images', action='append', help='Run model on selected black and white image')
+    argParser.add_argument('--load_model', dest='load_model', action='store_true', help='Load model from snapshot')
+    argParser.add_argument('--snapshot_path', dest='snapshot_path', action='store', help='Snapshot position, defaults to \'snapshots\' folder.')
+    argParser.add_argument('--starting_epoch', dest='starting_epoch', action='store', type=int, default=0, help='Starting epoch when continuing training from saved snapshot.')
+    return argParser.parse_args()
+
+def setup_environment():
+    # Force enable garbage collector
+    gc.enable()
+
+    # Clear Keras cache, just in case
+    tf.keras.backend.clear_session()
+
+def print_info():
+    print("Using computer: " + os.uname()[1])
+    print("Current time: " + datetime.now().strftime('%d-%m-%Y-%H:%M:%S'))
+    print("Tensorflow version: " + tf.__version__)
+
+def setup_gpu():
+    # Find out whether CUDA-capable GPU is available and if it is, allow Tensorflow to use is
+    freeGpu = subprocess.check_output('nvidia-smi -q | grep "Minor\|Processes" | grep "None" -B1 | tr -d " " | cut -d ":" -f2 | sed -n "1p"', shell=True)
+    if len(freeGpu) == 0:
+        print('No free GPU available, running in CPU-only mode!')
+    else:
+        print("Found GPU: " + str(freeGpu))
+    os.environ['CUDA_VISIBLE_DEVICES'] = freeGpu.decode().strip()
+
+if __name__ == "__main__":
+    print_info()
+    setup_environment()
+    setup_gpu()
+
+    # Arguments that are used during model initialization are extracted
+    init_args = {} 
+    args = parse_args()
+    for arg in vars(args):
+        if getattr(args, arg) is not None and arg not in ["load_model", "snapshot_path", "starting_epoch"]:
+            init_args[arg] = getattr(args, arg)
+
+    model = DeOldify(**init_args)
