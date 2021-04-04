@@ -1,4 +1,6 @@
 from tensorflow import keras
+from dataset import Dataset
+import sys
 
 class DeOldify(keras.Model):
     # TODO: Initialize the model
@@ -36,9 +38,19 @@ class DeOldify(keras.Model):
         pass
 
     # TODO: Load dataset - ImageNet (http://image-net.org/)
-    def load_dataset(self):
-        # Inspiration: https://patrykchrabaszcz.github.io/Imagenet32/
-        pass
+    def load_dataset(self, dataset_name):
+        # Inspiration: 
+        # ImageNet - https://patrykchrabaszcz.github.io/Imagenet32/
+        # CIFAR-100 - https://www.cs.toronto.edu/~kriz/cifar.html
+        self.dataset = Dataset()
+        if dataset_name == "ImageNet":
+            self.dataset.load_imagenet()
+        elif dataset_name == "CIFAR-100":
+            self.dataset.load_cifar100()
+        else:
+            print("ERROR: Selected invalid dataset.")
+            sys.exit(1)
+        
 
     # TODO: Batch provider, implemented as a generator, returning data with shape (batch_size, width, height, 3)
     # Note: We could possibly try to add labels later, that probably would make network work better

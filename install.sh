@@ -7,3 +7,8 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 
 # Download and install required packages
 pip install -r requirements.txt
+
+# Prepare folders
+mkdir dataset
+mkdir dataset/ImageNet
+mkdir dataset/CIFAR-100

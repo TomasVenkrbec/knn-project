@@ -13,6 +13,7 @@ def parse_args():
     argParser.add_argument('--load_weights', dest='load_weights', action='store_true', help='Load weights from snapshot')
     argParser.add_argument('--snapshot_path', dest='snapshot_path', action='store', help='Snapshot position, defaults to \'snapshots\' folder.')
     argParser.add_argument('--starting_epoch', dest='starting_epoch', action='store', type=int, default=0, help='Starting epoch when continuing training from saved snapshot.')
+    argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet', 'CIFAR-100'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
     return argParser.parse_args()
 
 def setup_environment():
@@ -24,7 +25,7 @@ def setup_environment():
 
 def print_info():
     print("Using computer: " + os.uname()[1])
-    print("Current time: " + datetime.now().strftime('%d-%m-%Y-%H:%M:%S'))
+    print("Current time: " + datetime.now().strftime('%d-%m-%Y %H:%M:%S'))
     print("Tensorflow version: " + tf.__version__)
 
 def setup_gpu():
@@ -58,7 +59,7 @@ if __name__ == "__main__":
     init_args = {} 
     args = parse_args()
     for arg in vars(args):
-        if getattr(args, arg) is not None and arg not in ["load_weights", "snapshot_path", "starting_epoch", "images"]:
+        if getattr(args, arg) is not None and arg not in ["load_weights", "snapshot_path", "starting_epoch", "images", "dataset"]:
             init_args[arg] = getattr(args, arg)
 
     model = DeOldify(**init_args)
@@ -71,4 +72,5 @@ if __name__ == "__main__":
     if args.images is not None:
         model.colorize_selected_images(args.images)
     else: # Train the model
+        model.load_dataset(args.dataset)
         model.train()
