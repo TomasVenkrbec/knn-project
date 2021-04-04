@@ -42,7 +42,7 @@ def load_weights(model, args):
         weights_path = args.snapshot_path
     else:
         weights_path = "snapshots/"
-    
+
     if not (os.path.exists(weights_path) and os.path.isfile(weights_path + "discriminator_weights.h5") and os.path.isfile(weights_path + "generator_weights.h5")):
         print(f"ERROR: Can't find files with saved weights in {'selected' if not args.snapshot_path else 'default snapshot'} folder.")
         sys.exit(1)
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     setup_gpu()
 
     # Arguments that are used during model initialization are extracted
-    init_args = {} 
+    init_args = {}
     args = parse_args()
     for arg in vars(args):
         if getattr(args, arg) is not None and arg not in ["load_weights", "snapshot_path", "starting_epoch", "images", "dataset"]:

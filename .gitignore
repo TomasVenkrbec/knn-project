@@ -1,3 +1,4 @@
 env-knn/*
 .vscode/*
 __pycache__/*
+dataset/*
