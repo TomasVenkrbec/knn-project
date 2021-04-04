@@ -1,7 +1,6 @@
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
 
 # Samples are saved in (sample_count, width, height, 3) shape
 class Dataset:
@@ -27,7 +26,9 @@ class Dataset:
             dict = pickle.load(fo, encoding='bytes')
 
         self.x = dict[b'data']
-        self.labels = dict[b'fine_labels']
+        y_list = dict[b'fine_labels']
+        self.y = np.array(y_list)
+        print(self.y)
 
         self.x = np.dstack((self.x[:, :1024], self.x[:, 1024:2048], self.x[:, 2048:]))
         self.x = self.x.reshape((self.x.shape[0], 32, 32, 3))
@@ -48,8 +49,12 @@ class Dataset:
         print("Shape of input converted grayscale data:")
         print(self.x_grayscale.shape)
 
-        self.x_train = self.x_grayscale[:80,:] # inputs - grayscale images
-        self.y_train = self.x[:80,:] # ground truth - rgb images
+        self.x_train = self.x_grayscale[:40000,:] # inputs - grayscale images
+        #print(self.x_train.shape)
+        self.y_train = self.y[:40000] # labels
+        #print(self.y_train.shape)
+        self.gt_train = self.x[:40000,:] # ground truth - rgb images
+        #print(self.gt_train.shape)
 
         '''
         # show some samples from train data
@@ -60,11 +65,14 @@ class Dataset:
 
         for i in range(9):
             plt.subplot(330 + 1 + i)
-            plt.imshow(self.y_train[i])
+            plt.imshow(self.gt_train[i])
         plt.show()
         '''
-        self.x_val = self.x_grayscale[80:,:]# inputs - grayscale images
-        self.y_val = self.x[80:,:] # ground truth - rgb images
+
+        self.x_val = self.x_grayscale[40000:,:]# inputs - grayscale images
+        self.y_val = self.y[40000:] # labels
+        self.gt_val = self.x[40000:,:] # ground truth - rgb images
+
         '''
         # show some samples from val data
         for i in range(9):
@@ -74,7 +82,7 @@ class Dataset:
 
         for i in range(9):
             plt.subplot(330 + 1 + i)
-            plt.imshow(self.y_val[i])
+            plt.imshow(self.gt_val[i])
         plt.show()
         '''
         self.check_dataset()
