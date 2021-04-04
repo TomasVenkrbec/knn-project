@@ -50,12 +50,6 @@ class DeOldify(keras.Model):
         else:
             print("ERROR: Selected invalid dataset.")
             sys.exit(1)
-        
-
-    # TODO: Batch provider, implemented as a generator, returning data with shape (batch_size, width, height, 3)
-    # Note: We could possibly try to add labels later, that probably would make network work better
-    def batch_provider(self):
-        pass
     
     # TODO: Colorize images that were selected in arguments and quit
     def colorize_selected_images(self, images):
