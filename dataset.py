@@ -169,11 +169,11 @@ class Dataset:
         with open("./dataset/ImageNet/val_data", 'rb') as fo:
             val_dict = pickle.load(fo, encoding='bytes')
 
-        self.x = val_dict['data']
+        self.x_val = val_dict['data']
         y_val_list = val_dict['labels']
-        self.y_val = np.array(y_train_list)
+        self.y_val = np.array(y_val_list)
 
-        self.gt_val = self.get_input_img32(self.x)
+        self.gt_val = self.get_input_img32(self.x_val)
         print("Shape of input val rgb data:")
         print(self.gt_val.shape)
 
