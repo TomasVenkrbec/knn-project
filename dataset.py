@@ -119,9 +119,11 @@ class Dataset:
         i = 0
         # cycle for concatenate all batches from image net together
         for file in glob.glob("./dataset/ImageNet/*"):
+            file_substr = file.split('/')[-1] # get name of processed file
+            if (file_substr == "val_data"):
+                continue
             with open(file, 'rb') as fo:
-                if (fo != "val_data"):
-                    train_batch_dict = pickle.load(fo, encoding='bytes')
+                train_batch_dict = pickle.load(fo, encoding='bytes')
 
             x_batch_train = train_batch_dict['data']
             x_batch_train = self.get_input_img32(x_batch_train)
