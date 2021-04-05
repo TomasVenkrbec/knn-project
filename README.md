@@ -17,6 +17,6 @@ Project is based on original [DeOldify](https://github.com/dana-kelley/DeOldify)
 ## Requirements / Tested on
  - Python 3.8.5
  - Tensorflow 2.4.1
- - [ImageNet](http://image-net.org/) or [CIFAR-100](https://www.cs.toronto.edu/~kriz/cifar.html) dataset 
+ - [ImageNet](http://image-net.org/) dataset (preferably downscaled 64x64 version)
 
 ![Swish swoosh](swish.jpg "Swish swoosh")

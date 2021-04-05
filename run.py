@@ -9,10 +9,13 @@ from model import DeOldify
 
 def parse_args():
     argParser = argparse.ArgumentParser(description='Train a generative adversarial network model from scratch, continue training from a snapshot or run model on given black and white image.')
-    argParser.add_argument('--images', dest='images', nargs='+', help='Run model on selected black and white image')
+    argParser.add_argument('--images', dest='images', action='store_true', default=False, help='Run model on black and white images from \'images_to_colorize\' folder.')
     argParser.add_argument('--load_weights', dest='load_weights', action='store_true', help='Load weights from snapshot')
     argParser.add_argument('--snapshot_path', dest='snapshot_path', action='store', help='Snapshot position, defaults to \'snapshots\' folder.')
     argParser.add_argument('--starting_epoch', dest='starting_epoch', action='store', type=int, default=0, help='Starting epoch when continuing training from saved snapshot.')
+    argParser.add_argument('--resolution', dest='resolution', action='store', type=int, help='Resolution of samples from dataset.')
+    argParser.add_argument('--filters_gen', dest='filters_gen', action='store', type=int, help='Number of filters in first and last layer of generator.') 
+    argParser.add_argument('--filters_disc', dest='filters_disc', action='store', type=int, help='Number of filters in first layer of discriminator.') 
     argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet', 'CIFAR-100'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
     return argParser.parse_args()
 
@@ -67,10 +70,13 @@ if __name__ == "__main__":
     # Load model if needed
     if args.load_weights == True:
         load_weights(model, args)
+    
+    # Build model
+    model.build_model()
 
     # Only colorize images selected in arguments
-    if args.images is not None:
-        model.colorize_selected_images(args.images)
+    if args.images:
+        model.colorize_selected_images()
     else: # Train the model
         model.load_dataset(args.dataset)
         model.train()

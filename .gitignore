@@ -2,3 +2,5 @@ env-knn/*
 .vscode/*
 __pycache__/*
 dataset/*
+gen_model.png
+disc_model.png

@@ -12,3 +12,5 @@ pip install -r requirements.txt
 mkdir dataset
 mkdir dataset/ImageNet
 mkdir dataset/CIFAR-100
+mkdir images_to_colorize/
+mkdir results/
