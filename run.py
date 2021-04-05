@@ -16,7 +16,11 @@ def parse_args():
     argParser.add_argument('--resolution', dest='resolution', action='store', type=int, help='Resolution of samples from dataset.')
     argParser.add_argument('--filters_gen', dest='filters_gen', action='store', type=int, help='Number of filters in first and last layer of generator.') 
     argParser.add_argument('--filters_disc', dest='filters_disc', action='store', type=int, help='Number of filters in first layer of discriminator.') 
-    argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet', 'CIFAR-100'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
+    argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
+    argParser.add_argument('--disc_lr', dest='disc_lr', action='store', type=float, help='Learning rate of discriminator network.')
+    argParser.add_argument('--gen_lr', dest='gen1_lr', action='store', type=float, help='Learning rate of generator network.')
+    argParser.add_argument('--beta_1', dest='beta_1', action='store', type=float, help='First order momentum value, hyperparameter of Adam optimizer.') 
+    argParser.add_argument('--beta_2', dest='beta_2', action='store', type=float, help='Second order momentum value, hyperparameter of Adam optimizer.') 
     return argParser.parse_args()
 
 def setup_environment():

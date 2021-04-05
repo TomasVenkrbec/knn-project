@@ -1,6 +1,8 @@
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, AveragePooling2D, UpSampling2D, Concatenate, Flatten, Dense
 from tensorflow.keras.utils import plot_model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.losses import BinaryCrossentropy
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from dataset import Dataset
@@ -10,18 +12,55 @@ import sys
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
 
 class DeOldify(Model):
-    def __init__(self, resolution=64, filters_gen=32, filters_disc=16):
+    def __init__(self, 
+                resolution=64, 
+                filters_gen=32, 
+                filters_disc=16, 
+                generator_lr=0.0001, 
+                discriminator_lr=0.0004, 
+                beta_1=0, 
+                beta_2=0.9):
         super().__init__()
+        
+        # Training-related settings
         self.load_weights = False # Start new training by default
         self.starting_epoch = 0
+
+        # Network-related settings
         self.resolution = resolution # Resolution of train images
         self.filters_gen = filters_gen # Number of convolutional filters in first and last layer of generator
         self.filters_disc = filters_disc # Number of convolutional filters in first layer of discriminator
+        self.loss = BinaryCrossentropy(label_smoothing=0.1)
 
-    # TODO: Build the entire model
+        # Hyperparameters
+        self.generator_lr = generator_lr
+        self.discriminator_lr = discriminator_lr
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
+
     def build_model(self):
+        # Create models of both networks
         self.generator = self.create_generator()
         self.discriminator = self.create_discriminator()
+
+        # Optimizer settings
+        optimizer_gen = Adam(lr=self.generator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
+        optimizer_disc = Adam(lr=self.discriminator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
+
+        # Compile discriminator
+        self.discriminator.compile(optimizer=optimizer_disc, loss=self.loss, metrics=['accuracy'])
+
+        # Prepare inputs for combined model
+        greyscale_img = self.generator.input
+        image_output = self.generator(greyscale_img)
+        d_class = self.discriminator(image_output)
+
+        # Combine both models into one, where greyscale image is processed by generator and then is placed into discriminator
+        # Discriminator is not trainable in this model
+        self.discriminator.trainable = False
+        self.combined_model = Model(greyscale_img, d_class)
+        self.combined_model.compile(optimizer=optimizer_gen, loss=self.loss)
+        self.discriminator.trainable = True
 
     def create_generator(self):
         layer_outputs = [] # Outputs of last convolution in the "left side" of U-net, which will be copied to "right side" of U-net
@@ -140,8 +179,6 @@ class DeOldify(Model):
         self.dataset = Dataset(self.resolution)
         if dataset_name == "ImageNet":
             self.dataset.load_imagenet()
-        elif dataset_name == "CIFAR-100":
-            self.dataset.load_cifar100()
         else:
             print("ERROR: Selected invalid dataset.")
             sys.exit(1)
