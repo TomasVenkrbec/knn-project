@@ -1,12 +1,15 @@
+import tensorflow.keras.backend as K
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, AveragePooling2D, UpSampling2D, Concatenate, Flatten, Dense
 from tensorflow.keras.utils import plot_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.metrics import Mean, Accuracy
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from dataset import Dataset
-
+from tensorflow import GradientTape, math
+import numpy as np
 import sys
 
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
@@ -17,20 +20,25 @@ class DeOldify(Model):
                 filters_gen=32, 
                 filters_disc=16, 
                 generator_lr=0.0001, 
-                discriminator_lr=0.0004, 
+                discriminator_lr=0.0004,
+                batch_size=2,
+                epochs=100,
                 beta_1=0, 
                 beta_2=0.9):
         super().__init__()
-        
+
         # Training-related settings
         self.load_weights = False # Start new training by default
+        self.weights_path = None
         self.starting_epoch = 0
+        self.batch_size = batch_size
+        self.epochs = epochs
 
         # Network-related settings
         self.resolution = resolution # Resolution of train images
         self.filters_gen = filters_gen # Number of convolutional filters in first and last layer of generator
         self.filters_disc = filters_disc # Number of convolutional filters in first layer of discriminator
-        self.loss = BinaryCrossentropy(label_smoothing=0.1)
+        self.loss = BinaryCrossentropy()
 
         # Hyperparameters
         self.generator_lr = generator_lr
@@ -38,17 +46,34 @@ class DeOldify(Model):
         self.beta_1 = beta_1
         self.beta_2 = beta_2
 
+    def compile(self):
+        super().compile()
+
+        # Prepare all metrics
+        self.d_real_loss_metric = Mean(name="d_real_loss_metric")
+        self.d_fake_loss_metric = Mean(name="d_fake_loss_metric")
+        self.d_real_accuracy_metric = Accuracy(name="d_real_accuracy_metric")
+        self.d_fake_accuracy_metric = Accuracy(name="d_fake_accuracy_metric")
+        self.g_loss_metric = Mean(name="g_loss")
+
+    def call(self, inputs, **kwargs):
+        return None
+
+    @property
+    def metrics(self):
+        return [self.d_real_loss_metric, self.d_fake_loss_metric, self.d_real_accuracy_metric, self.d_fake_accuracy_metric, self.g_loss_metric]
+
     def build_model(self):
         # Create models of both networks
         self.generator = self.create_generator()
         self.discriminator = self.create_discriminator()
 
         # Optimizer settings
-        optimizer_gen = Adam(lr=self.generator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
-        optimizer_disc = Adam(lr=self.discriminator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
+        self.optimizer_gen = Adam(lr=self.generator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
+        self.optimizer_disc = Adam(lr=self.discriminator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
 
         # Compile discriminator
-        self.discriminator.compile(optimizer=optimizer_disc, loss=self.loss, metrics=['accuracy'])
+        self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
 
         # Prepare inputs for combined model
         greyscale_img = self.generator.input
@@ -58,9 +83,10 @@ class DeOldify(Model):
         # Combine both models into one, where greyscale image is processed by generator and then is placed into discriminator
         # Discriminator is not trainable in this model
         self.discriminator.trainable = False
-        self.combined_model = Model(greyscale_img, d_class)
-        self.combined_model.compile(optimizer=optimizer_gen, loss=self.loss)
+        self.combined_model = Model(inputs=greyscale_img, outputs=d_class)
+        self.combined_model.compile(optimizer=self.optimizer_gen, loss=self.loss)
         self.discriminator.trainable = True
+        plot_model(self.combined_model, to_file="combined_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
 
     def create_generator(self):
         layer_outputs = [] # Outputs of last convolution in the "left side" of U-net, which will be copied to "right side" of U-net
@@ -113,8 +139,7 @@ class DeOldify(Model):
             filters //= 2
         
         # Change the number of feature maps to 3, so we get final RGB image
-        gen = ConvSN2D(3, kernel_size=1, activation="tanh", padding="same")(gen)
-        output_gen = SelfAttention(3)(gen)
+        output_gen = ConvSN2D(3, kernel_size=1, activation="tanh", padding="same")(gen)
 
         # Create the generator model
         generator_model = Model(inputs=grayscale_img, outputs=output_gen)
@@ -171,11 +196,8 @@ class DeOldify(Model):
     def plot_results(self):
         pass
 
-    # TODO: Load dataset - ImageNet (http://image-net.org/)
+    # ImageNet (http://image-net.org/)
     def load_dataset(self, dataset_name):
-        # Inspiration: 
-        # ImageNet - https://patrykchrabaszcz.github.io/Imagenet32/
-        # CIFAR-100 - https://www.cs.toronto.edu/~kriz/cifar.html
         self.dataset = Dataset(self.resolution)
         if dataset_name == "ImageNet":
             self.dataset.load_imagenet()
@@ -200,9 +222,60 @@ class DeOldify(Model):
 
         # Try to use fit() instead of manually training batch by batch
         # https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
-        pass
 
-    # TODO: Overwrite the default class train_step function, so we can train GAN with fit()
+        train_gen = self.dataset.batch_provider(self.batch_size)
+        train_val = self.dataset.batch_provider(self.batch_size, train=False)
+        self.fit(train_gen, batch_size=self.batch_size, epochs=self.epochs, steps_per_epoch=self.dataset.train_count//self.batch_size)
+
+    # Inspiration: https://keras.io/examples/generative/dcgan_overriding_train_step/
     def train_step(self, data):
-        # Inspiration: https://keras.io/examples/generative/dcgan_overriding_train_step/
-        pass
+        # Get image and labels
+        real_images, labels, grayscale_images = data
+
+        # Generate RGB images from grayscale ground truth
+        generated_images = self.generator(grayscale_images)
+
+        # Create labels for discriminator
+        labels_real = np.zeros((self.batch_size, 1))
+        labels_fake = np.ones((self.batch_size, 1))
+
+        # Add random noise to labels
+        labels_real += 0.05 * np.random.uniform(size=labels_real.shape)
+        labels_fake -= 0.05 * np.random.uniform(size=labels_fake.shape)
+
+        # Train discriminator on real images
+        with GradientTape() as tape:
+            predictions_real = self.discriminator(real_images)
+            d_real_loss = BinaryCrossentropy()(labels_real, predictions_real)
+        grads = tape.gradient(d_real_loss, self.discriminator.trainable_weights)
+        self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
+
+        # Train discriminator on fake images
+        with GradientTape() as tape:
+            predictions_fake = self.discriminator(generated_images)
+            d_fake_loss = BinaryCrossentropy()(labels_fake, predictions_fake)
+        grads = tape.gradient(d_fake_loss, self.discriminator.trainable_weights)
+        self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
+
+        # Train generator in combined model
+        labels_real = np.zeros((self.batch_size, 1)) # Initialize again, because we don't want noise in generator
+        with GradientTape() as tape:
+            predictions_gen = self.combined_model(grayscale_images)
+            g_loss = BinaryCrossentropy()(labels_real, predictions_gen)
+        grads = tape.gradient(g_loss, self.combined_model.trainable_weights)
+        self.optimizer_gen.apply_gradients(zip(grads, self.combined_model.trainable_weights))
+
+        # Update metrics
+        self.d_real_loss_metric.update_state(d_real_loss)
+        self.d_fake_loss_metric.update_state(d_fake_loss)
+        self.d_real_accuracy_metric.update_state(np.around(labels_real), math.round(predictions_real))
+        self.d_fake_accuracy_metric.update_state(np.around(labels_fake), math.round(predictions_fake))
+        self.g_loss_metric.update_state(g_loss)
+
+        return {
+            "d_real_loss": self.d_real_loss_metric.result(),
+            "d_fake_loss": self.d_fake_loss_metric.result(),
+            "d_real_accuracy": self.d_real_accuracy_metric.result(),
+            "d_fake_accuracy": self.d_fake_accuracy_metric.result(),
+            "g_loss": self.g_loss_metric.result()
+        }

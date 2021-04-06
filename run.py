@@ -15,7 +15,9 @@ def parse_args():
     argParser.add_argument('--starting_epoch', dest='starting_epoch', action='store', type=int, default=0, help='Starting epoch when continuing training from saved snapshot.')
     argParser.add_argument('--resolution', dest='resolution', action='store', type=int, help='Resolution of samples from dataset.')
     argParser.add_argument('--filters_gen', dest='filters_gen', action='store', type=int, help='Number of filters in first and last layer of generator.') 
-    argParser.add_argument('--filters_disc', dest='filters_disc', action='store', type=int, help='Number of filters in first layer of discriminator.') 
+    argParser.add_argument('--filters_disc', dest='filters_disc', action='store', type=int, help='Number of filters in first layer of discriminator.')
+    argParser.add_argument('--batch_size', dest='batch_size', action='store', type=int, help='Number of samples in every training step.')  
+    argParser.add_argument('--epochs', dest='epochs', action='store', type=int, help='Number of epochs to train for.')
     argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
     argParser.add_argument('--disc_lr', dest='disc_lr', action='store', type=float, help='Learning rate of discriminator network.')
     argParser.add_argument('--gen_lr', dest='gen1_lr', action='store', type=float, help='Learning rate of generator network.')
@@ -83,4 +85,5 @@ if __name__ == "__main__":
         model.colorize_selected_images()
     else: # Train the model
         model.load_dataset(args.dataset)
+        model.compile()
         model.train()

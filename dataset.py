@@ -4,36 +4,51 @@ import matplotlib.pyplot as plt
 import glob
 import random
 
+def convert_all_imgs_to_grayscale(x):
+    # convert all images from dataset to grayscale
+    grayscale_list = np.array([])
+
+    for img in x:
+        grayscale_img = rgb2gray(img)
+        grayscale_list = np.append(grayscale_list, grayscale_img)
+
+    return grayscale_list.reshape(x.shape[0], x.shape[1], x.shape[2], 1)
+
+def rgb2gray(rgb):
+    # transform rgb image to grayscale image
+    gray_value = np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
+    gray_img = gray_value.astype(np.uint8)
+    return gray_img
+
 # Samples are saved in (sample_count, width, height, 3) shape
 class Dataset:
     def __init__(self, resolution=64):
         self.res = resolution
+        self.x_train = None
+        self.y_train = None
+        self.x_val = None
+        self.y_val = None
 
     # TODO: Batch provider, implemented as a generator, returning data with shape (batch_size, width, height, 3)
     # Note: We could possibly try to add labels later, that probably would make network work better
-    def batch_provider(self):
-        pass
-
-    def rgb2gray(self, rgb):
-        # transform rgb image to grayscale image
-        gray_value = np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
-        gray_img = gray_value.astype(np.uint8)
-        return gray_img
+    def batch_provider(self, batch_size, train=True):
+        while True:
+            if train:
+                indices = np.random.randint(0, len(self.x_train), batch_size)
+                batch_samples = np.array(self.x_train[indices], dtype=np.uint8)
+                batch_targets = np.array(self.y_train[indices], dtype=np.uint8)
+                grayscale_images = convert_all_imgs_to_grayscale(self.x_train[indices])
+            else:
+                indices = np.random.randint(0, len(self.x_val), batch_size)
+                batch_samples = np.array(self.x_val[indices], dtype=np.uint8)
+                batch_targets = np.array(self.y_val[indices], dtype=np.uint8)
+                grayscale_images = convert_all_imgs_to_grayscale(self.x_val[indices])
+            yield batch_samples, batch_targets, grayscale_images
 
     def get_input_img(self, x):
         x = np.dstack((x[:, :self.res**2], x[:, self.res**2:2*(self.res**2)], x[:, 2*self.res**2:]))
         x = x.reshape((x.shape[0], self.res, self.res, 3))
         return x
-
-    def convert_all_imgs_to_grayscale(self, x):
-        # convert all images from dataset to grayscale
-        grayscale_list = np.array([])
-
-        for img in x:
-            grayscale_img = self.rgb2gray(img)
-            np.append(grayscale_list, grayscale_img)
-
-        return grayscale_list
 
     def load_imagenet(self):
         # process train data
@@ -57,7 +72,7 @@ class Dataset:
                 self.x_train = x_batch_train
             else:
                 print(self.x_train.shape)
-                np.append(self.x_train, x_batch_train)
+                self.x_train = np.append(self.x_train, x_batch_train)
                 print(self.x_train.shape)
 
             i = i + 1
