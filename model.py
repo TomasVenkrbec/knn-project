@@ -5,10 +5,12 @@ from tensorflow.keras.utils import plot_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.metrics import Mean, Accuracy
+from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from dataset import Dataset
 from tensorflow import GradientTape, math
+from datetime import datetime
 import numpy as np
 import sys
 
@@ -23,6 +25,7 @@ class DeOldify(Model):
                 discriminator_lr=0.0004,
                 batch_size=2,
                 epochs=100,
+                output_frequency=50,
                 beta_1=0, 
                 beta_2=0.9):
         super().__init__()
@@ -33,6 +36,7 @@ class DeOldify(Model):
         self.starting_epoch = 0
         self.batch_size = batch_size
         self.epochs = epochs
+        self.output_frequency = output_frequency
 
         # Network-related settings
         self.resolution = resolution # Resolution of train images
@@ -215,17 +219,23 @@ class DeOldify(Model):
         self.weights_path = weights_path
         self.load_weights = True
 
-    # TODO: Train the networks
     def train(self):
-        # Try to use Tensorboard
         # https://www.tensorflow.org/tensorboard/get_started
-
-        # Try to use fit() instead of manually training batch by batch
         # https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
 
+        # Create Tensorboard callback and set Tensorboard log folder name
+        log_dir = "logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
+        
+        # Get train and validation batch generators
         train_gen = self.dataset.batch_provider(self.batch_size)
-        train_val = self.dataset.batch_provider(self.batch_size, train=False)
-        self.fit(train_gen, batch_size=self.batch_size, epochs=self.epochs, steps_per_epoch=self.dataset.train_count//self.batch_size)
+        val_gen = self.dataset.batch_provider(self.batch_size, train=False)
+        
+        # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
+        epoch_batches = self.dataset.train_count//self.batch_size
+        
+        # Train the model
+        self.fit(train_gen, batch_size=self.batch_size, epochs=self.epochs, callbacks=[tensorboard_callback], steps_per_epoch=epoch_batches)
 
     # Inspiration: https://keras.io/examples/generative/dcgan_overriding_train_step/
     def train_step(self, data):

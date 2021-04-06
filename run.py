@@ -17,6 +17,7 @@ def parse_args():
     argParser.add_argument('--filters_gen', dest='filters_gen', action='store', type=int, help='Number of filters in first and last layer of generator.') 
     argParser.add_argument('--filters_disc', dest='filters_disc', action='store', type=int, help='Number of filters in first layer of discriminator.')
     argParser.add_argument('--batch_size', dest='batch_size', action='store', type=int, help='Number of samples in every training step.')  
+    argParser.add_argument('--output_frequency', dest='output_frequency', action='store', type=int, help='Number of training batches between training metric exports.')  
     argParser.add_argument('--epochs', dest='epochs', action='store', type=int, help='Number of epochs to train for.')
     argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
     argParser.add_argument('--disc_lr', dest='disc_lr', action='store', type=float, help='Learning rate of discriminator network.')
