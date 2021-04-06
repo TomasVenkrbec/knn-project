@@ -9,12 +9,14 @@ from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from dataset import Dataset
-from tensorflow import GradientTape, math
+from tensorflow import GradientTape, math, summary
 from datetime import datetime
+from utils import plot_to_image, image_grid
 import numpy as np
 import sys
 
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
+EXAMPLE_COUNT = 25 # Number of example images in Tensorboard
 
 class DeOldify(Model):
     def __init__(self, 
@@ -224,12 +226,22 @@ class DeOldify(Model):
         # https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
 
         # Create Tensorboard callback and set Tensorboard log folder name
-        log_dir = "logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")
-        tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
+        logdir = "logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        tensorboard_callback = TensorBoard(log_dir=logdir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
         
         # Get train and validation batch generators
         train_gen = self.dataset.batch_provider(self.batch_size)
         val_gen = self.dataset.batch_provider(self.batch_size, train=False)
+
+        # Add train and val image sample to Tensorboard
+        train_gt_sample, _, train_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT))
+        val_gt_sample, _, val_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, train=False))
+        file_writer = summary.create_file_writer(logdir+"/train/plots")
+        with file_writer.as_default():
+            summary.image("Training data ground truth examples", plot_to_image(image_grid(train_gt_sample)), max_outputs=EXAMPLE_COUNT, step=0)
+            summary.image("Training data black & white examples", plot_to_image(image_grid(train_bw_sample)), max_outputs=EXAMPLE_COUNT, step=0)
+            summary.image("Validation data ground truth examples", plot_to_image(image_grid(val_gt_sample)), max_outputs=EXAMPLE_COUNT, step=0)
+            summary.image("Validation data black & white examples", plot_to_image(image_grid(val_bw_sample)), max_outputs=EXAMPLE_COUNT, step=0)
         
         # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
         epoch_batches = self.dataset.train_count//self.batch_size

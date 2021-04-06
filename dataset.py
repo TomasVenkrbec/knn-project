@@ -6,7 +6,7 @@ import random
 
 def convert_all_imgs_to_grayscale(x):
     # convert all images from dataset to grayscale
-    grayscale_list = np.array([])
+    grayscale_list = np.array([], dtype=np.uint8)
 
     for img in x:
         grayscale_img = rgb2gray(img)
