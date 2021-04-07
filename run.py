@@ -17,11 +17,13 @@ def parse_args():
     argParser.add_argument('--filters_gen', dest='filters_gen', action='store', type=int, help='Number of filters in first and last layer of generator.') 
     argParser.add_argument('--filters_disc', dest='filters_disc', action='store', type=int, help='Number of filters in first layer of discriminator.')
     argParser.add_argument('--batch_size', dest='batch_size', action='store', type=int, help='Number of samples in every training step.')  
-    argParser.add_argument('--output_frequency', dest='output_frequency', action='store', type=int, help='Number of training batches between training metric exports.')  
+    argParser.add_argument('--output_frequency', dest='output_frequency', action='store', type=int, help='Number of training batches between training metric exports.')
+    argParser.add_argument('--logdir', dest='logdir', action='store', help='Base folder for outputs.') 
+    argParser.add_argument('--output_count', dest='output_count', action='store', type=int, help='Number of images in exported result image.')  
     argParser.add_argument('--epochs', dest='epochs', action='store', type=int, help='Number of epochs to train for.')
     argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
-    argParser.add_argument('--disc_lr', dest='disc_lr', action='store', type=float, help='Learning rate of discriminator network.')
-    argParser.add_argument('--gen_lr', dest='gen1_lr', action='store', type=float, help='Learning rate of generator network.')
+    argParser.add_argument('--disc_lr', dest='discriminator_lr', action='store', type=float, help='Learning rate of discriminator network.')
+    argParser.add_argument('--gen_lr', dest='generator_lr', action='store', type=float, help='Learning rate of generator network.')
     argParser.add_argument('--beta_1', dest='beta_1', action='store', type=float, help='First order momentum value, hyperparameter of Adam optimizer.') 
     argParser.add_argument('--beta_2', dest='beta_2', action='store', type=float, help='Second order momentum value, hyperparameter of Adam optimizer.') 
     return argParser.parse_args()
@@ -37,6 +39,7 @@ def print_info():
     print("Using computer: " + os.uname()[1])
     print("Current time: " + datetime.now().strftime('%d-%m-%Y %H:%M:%S'))
     print("Tensorflow version: " + tf.__version__)
+    print("Eager execution enabled? " + str(tf.executing_eagerly()))
 
 def setup_gpu():
     # Find out whether CUDA-capable GPU is available and if it is, allow Tensorflow to use is

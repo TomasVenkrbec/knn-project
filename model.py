@@ -8,6 +8,7 @@ from tensorflow.keras.metrics import Mean, Accuracy
 from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
+from callbacks import ResultsGenerator
 from dataset import Dataset
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
@@ -28,6 +29,8 @@ class DeOldify(Model):
                 batch_size=2,
                 epochs=100,
                 output_frequency=50,
+                output_count=36,
+                logdir="logs",
                 beta_1=0, 
                 beta_2=0.9):
         super().__init__()
@@ -39,6 +42,8 @@ class DeOldify(Model):
         self.batch_size = batch_size
         self.epochs = epochs
         self.output_frequency = output_frequency
+        self.output_count = output_count
+        self.logdir = logdir + "/" + datetime.now().strftime("%Y%m%d-%H%M%S") 
 
         # Network-related settings
         self.resolution = resolution # Resolution of train images
@@ -185,23 +190,6 @@ class DeOldify(Model):
         plot_model(discriminator_model, to_file="disc_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
         return discriminator_model
 
-    # TODO: Generate various graphs
-    # - generator loss
-    # - discriminator loss and accuracy (if we use BCE)
-    # - batch of generated images (maybe compared to black & white and ground truth?)
-    #
-    # Note: If we somehow manage to run Tensorboard (which would be great!), there won't be a reason to have this function
-    def plot_graphs(self):
-        pass
-
-    # TODO: Functions for individual graphs which will be created periodically during training
-    def plot_loss_graph(self):
-        pass
-    def plot_accuracy_graph(self):
-        pass
-    def plot_results(self):
-        pass
-
     # ImageNet (http://image-net.org/)
     def load_dataset(self, dataset_name):
         self.dataset = Dataset(self.resolution)
@@ -226,8 +214,7 @@ class DeOldify(Model):
         # https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
 
         # Create Tensorboard callback and set Tensorboard log folder name
-        logdir = "logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")
-        tensorboard_callback = TensorBoard(log_dir=logdir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
+        tensorboard_callback = TensorBoard(log_dir=self.logdir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
         
         # Get train and validation batch generators
         train_gen = self.dataset.batch_provider(self.batch_size)
@@ -236,18 +223,22 @@ class DeOldify(Model):
         # Add train and val image sample to Tensorboard
         train_gt_sample, _, train_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT))
         val_gt_sample, _, val_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, train=False))
-        file_writer = summary.create_file_writer(logdir+"/train/plots")
-        with file_writer.as_default():
-            summary.image("Training data ground truth examples", plot_to_image(image_grid(train_gt_sample)), max_outputs=EXAMPLE_COUNT, step=0)
-            summary.image("Training data black & white examples", plot_to_image(image_grid(train_bw_sample)), max_outputs=EXAMPLE_COUNT, step=0)
-            summary.image("Validation data ground truth examples", plot_to_image(image_grid(val_gt_sample)), max_outputs=EXAMPLE_COUNT, step=0)
-            summary.image("Validation data black & white examples", plot_to_image(image_grid(val_bw_sample)), max_outputs=EXAMPLE_COUNT, step=0)
+        self.file_writer = summary.create_file_writer(self.logdir+"/train/plots")
+        with self.file_writer.as_default(step=0):
+            summary.image("Training data ground truth examples", plot_to_image(image_grid(train_gt_sample)), max_outputs=EXAMPLE_COUNT)
+            summary.image("Training data black & white examples", plot_to_image(image_grid(train_bw_sample, cmap="gray")), max_outputs=EXAMPLE_COUNT)
+            summary.image("Validation data ground truth examples", plot_to_image(image_grid(val_gt_sample)), max_outputs=EXAMPLE_COUNT)
+            summary.image("Validation data black & white examples", plot_to_image(image_grid(val_bw_sample, cmap="gray")), max_outputs=EXAMPLE_COUNT)
+        self.file_writer.close()
         
+        # Create ResultsGenerator callback, which periodically saves the network outputs
+        results_callback = ResultsGenerator(self.generator, self.dataset, self.logdir, tensorboard_callback, self.output_count, self.output_frequency)
+
         # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
         epoch_batches = self.dataset.train_count//self.batch_size
         
         # Train the model
-        self.fit(train_gen, batch_size=self.batch_size, epochs=self.epochs, callbacks=[tensorboard_callback], steps_per_epoch=epoch_batches)
+        self.fit(train_gen, batch_size=self.batch_size, epochs=self.epochs, callbacks=[results_callback, tensorboard_callback], steps_per_epoch=epoch_batches)
 
     # Inspiration: https://keras.io/examples/generative/dcgan_overriding_train_step/
     def train_step(self, data):

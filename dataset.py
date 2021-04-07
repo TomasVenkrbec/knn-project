@@ -29,7 +29,6 @@ class Dataset:
         self.x_val = None
         self.y_val = None
 
-    # TODO: Batch provider, implemented as a generator, returning data with shape (batch_size, width, height, 3)
     # Note: We could possibly try to add labels later, that probably would make network work better
     def batch_provider(self, batch_size, train=True):
         while True:
@@ -71,9 +70,7 @@ class Dataset:
             if (i == 0):
                 self.x_train = x_batch_train
             else:
-                print(self.x_train.shape)
                 self.x_train = np.append(self.x_train, x_batch_train)
-                print(self.x_train.shape)
 
             i = i + 1
             
