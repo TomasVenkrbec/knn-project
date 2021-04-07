@@ -52,6 +52,7 @@ class DeOldify(Model):
         self.filters_gen = filters_gen # Number of convolutional filters in first and last layer of generator
         self.filters_disc = filters_disc # Number of convolutional filters in first layer of discriminator
         self.loss = BinaryCrossentropy()
+        self.loss_gen = perceptual_loss
 
         # Hyperparameters
         self.generator_lr = generator_lr
@@ -85,7 +86,7 @@ class DeOldify(Model):
 
         # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
-        self.generator.compile(optimizer=self.optimizer_gen, loss=[self.loss, perceptual_loss])
+        self.generator.compile(optimizer=self.optimizer_gen, loss=[self.loss, self.loss_gen])
         
         # Print out models and save their structures to image file
         self.generator.summary()
@@ -239,37 +240,51 @@ class DeOldify(Model):
     def train_step(self, data):
         # Get image and labels
         real_images, labels, grayscale_images = data
+        
+        # Convert images to <-1;1> range
+        real_images = (K.cast(real_images, "float32") - 127.5) / 127.5 
+        grayscale_images = (K.cast(grayscale_images, "float32") - 127.5) / 127.5
 
         # Generate RGB images from grayscale ground truth
         generated_images = self.generator(grayscale_images)
 
         # Combine them with real images
-        combined_images = tf.concat([generated_images, K.cast(real_images, dtype="float32")], axis=0)
+        combined_images = tf.concat([generated_images, real_images], axis=0)
 
         # Create labels for discriminator
         labels_real = np.zeros((self.batch_size, 1))    
         labels_fake = np.ones((self.batch_size, 1))
         labels_disc = np.concatenate([labels_fake, labels_real], axis=0)
 
-        # Add random noise to labels
-        labels_disc += 0.05 * np.random.uniform(size=labels_disc.shape)
-
         # Train discriminator
         with GradientTape() as tape:
             predictions_disc = self.discriminator(combined_images)
-            d_loss = BinaryCrossentropy()(labels_disc, predictions_disc)
+            d_loss = BinaryCrossentropy(label_smoothing=0.1)(labels_disc, predictions_disc)
         grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
         self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
 
-        # Train generator in combined model
+        # Get new batch of images for generator training
         real_images, labels, grayscale_images = next(self.dataset.batch_provider(self.batch_size))
+        
+        # Convert images to <-1;1> range
+        real_images = (K.cast(real_images, "float32") - 127.5) / 127.5 
+        grayscale_images = (K.cast(grayscale_images, "float32") - 127.5) / 127.5
+        
+        # Train generator
         with GradientTape() as tape:
             generated_images = self.generator(grayscale_images)
             predictions_gen = self.discriminator(generated_images)
             g_loss_bce = BinaryCrossentropy()(labels_real, predictions_gen)
-            g_loss_vgg = perceptual_loss(real_images, generated_images)
-            g_loss = math.add(g_loss_bce, g_loss_vgg)
-        grads = tape.gradient(g_loss, self.generator.trainable_weights)
+
+            # We use VGG to force network to output the same image, but colored,
+            # so we take input grayscale images and output image converted to grayscale and measure the loss
+            # Images need to have 3 channels in order to work with VGG, so we stack the single grey channel 
+            grayscale_images_vgg = tf.image.grayscale_to_rgb(grayscale_images)
+            generated_images_vgg = tf.image.rgb_to_grayscale(generated_images)
+            generated_images_vgg = tf.image.grayscale_to_rgb(generated_images_vgg)
+            g_loss_vgg = perceptual_loss(grayscale_images_vgg, generated_images_vgg)
+            g_loss = g_loss_bce + tf.reduce_mean(g_loss_vgg)
+        grads = tape.gradient(g_loss_vgg, self.generator.trainable_weights)
         self.optimizer_gen.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         # Update metrics
@@ -278,7 +293,7 @@ class DeOldify(Model):
         self.g_loss_metric.update_state(g_loss)
 
         return {
-            "d_loss": self.d_loss_metric.result(),
+            "d_loss": d_loss,
             "d_accuracy": self.d_accuracy_metric.result(),
-            "g_loss": self.g_loss_metric.result()
+            "g_loss": g_loss
         }

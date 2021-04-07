@@ -7,7 +7,7 @@ import numpy as np
 class ResultsGenerator(Callback):
     def __init__(self, generator, dataset, logdir, tb_callback, img_count=36, output_frequency=50):
         self.generator = generator
-        self.dataset= dataset
+        self.dataset = dataset
         self.logdir = logdir
         self.img_count = img_count
         self.output_frequency = output_frequency
@@ -19,15 +19,19 @@ class ResultsGenerator(Callback):
         # Generate inputs for generator without ground truths, will not change over time
         _, _, self.bw_sample_no_gt = next(dataset.batch_provider(img_count, train=False))
 
+        # Convert black and white inputs to <-1;1> range
+        self.bw_sample = (self.bw_sample - 127.5) / 127.5
+        self.bw_sample_no_gt = (self.bw_sample_no_gt - 127.5) / 127.5
+
     def on_batch_end(self, batch, logs=None):
         if batch % self.output_frequency == 0:
             # Generate the images 
             generated_images_gt = self.generator.predict(self.bw_sample)
-            generated_images_no_gt = self.generator.predict(self.bw_sample)
+            generated_images_no_gt = self.generator.predict(self.bw_sample_no_gt)
 
             # Convert to <0;255> range
-            generated_images_gt *= 255 
-            generated_images_no_gt *= 255
+            generated_images_gt = generated_images_gt * 127.5 + 127.5 
+            generated_images_no_gt = generated_images_no_gt * 127.5 + 127.5
 
             # Merge arrays together so that new array alternates between real and fake images
             images_gt = np.empty((self.img_count*2, self.gt_sample.shape[1], self.gt_sample.shape[2], self.gt_sample.shape[3]), dtype=np.uint8)
