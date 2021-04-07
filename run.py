@@ -34,7 +34,7 @@ def setup_environment():
 
     # Clear Keras cache, just in case
     tf.keras.backend.clear_session()
-    tf.config.run_functions_eagerly(True)
+    #tf.config.run_functions_eagerly(True)
 
 def print_info():
     print("Using computer: " + os.uname()[1])
@@ -65,8 +65,8 @@ def load_weights(model, args):
     model.prepare_snapshot_load(args.starting_epoch, weights_path)
 
 if __name__ == "__main__":
-    print_info()
     setup_environment()
+    print_info()
     setup_gpu()
 
     # Arguments that are used during model initialization are extracted

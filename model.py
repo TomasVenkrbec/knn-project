@@ -6,18 +6,17 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.metrics import Mean, Accuracy
 from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.applications.vgg19 import VGG19
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from callbacks import ResultsGenerator
 from dataset import Dataset
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
-from utils import plot_to_image, image_grid 
+from utils import plot_to_image, image_grid, perceptual_loss
 import tensorflow.keras.backend as K
+import tensorflow as tf
 import numpy as np
 import sys
-
 
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
 EXAMPLE_COUNT = 25 # Number of example images in Tensorboard
@@ -75,19 +74,6 @@ class DeOldify(Model):
     def metrics(self):
         return [self.d_loss_metric, self.d_accuracy_metric, self.g_loss_metric]
 
-    # Content (perception) loss
-    # Author: Deepak Birla (https://gist.github.com/deepak112)
-    # Source: https://gist.github.com/deepak112/c76ed1dbbfa3eff1249493eadfd2b9b5
-    def vgg_loss(self, y_true, y_pred):
-        vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=(self.resolution, self.resolution, 3))
-        vgg19.trainable = False
-        for l in vgg19.layers:
-            l.trainable = False
-        model = Model(inputs=vgg19.input, outputs=vgg19.get_layer('block5_conv4').output)
-        model.trainable = False
-        
-        return K.mean(K.square(model(y_true) - model(y_pred)))
-
     def build_model(self):
         # Create models of both networks
         self.generator = self.create_generator()
@@ -99,7 +85,7 @@ class DeOldify(Model):
 
         # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
-        self.generator.compile(optimizer=self.optimizer_gen, loss=self.loss)
+        self.generator.compile(optimizer=self.optimizer_gen, loss=[self.loss, perceptual_loss])
         
         # Print out models and save their structures to image file
         self.generator.summary()
@@ -258,7 +244,7 @@ class DeOldify(Model):
         generated_images = self.generator(grayscale_images)
 
         # Combine them with real images
-        combined_images = np.concatenate([generated_images, real_images], axis=0)
+        combined_images = tf.concat([generated_images, K.cast(real_images, dtype="float32")], axis=0)
 
         # Create labels for discriminator
         labels_real = np.zeros((self.batch_size, 1))    
@@ -276,10 +262,12 @@ class DeOldify(Model):
         self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
 
         # Train generator in combined model
+        real_images, labels, grayscale_images = next(self.dataset.batch_provider(self.batch_size))
         with GradientTape() as tape:
-            predictions_gen = self.discriminator(self.generator(grayscale_images))
+            generated_images = self.generator(grayscale_images)
+            predictions_gen = self.discriminator(generated_images)
             g_loss_bce = BinaryCrossentropy()(labels_real, predictions_gen)
-            g_loss_vgg = self.vgg_loss(real_images, generated_images)
+            g_loss_vgg = perceptual_loss(real_images, generated_images)
             g_loss = math.add(g_loss_bce, g_loss_vgg)
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.optimizer_gen.apply_gradients(zip(grads, self.generator.trainable_weights))

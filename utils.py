@@ -1,6 +1,32 @@
 import matplotlib.pyplot as plt
 import io
+import tensorflow.keras.backend as K
+from tensorflow.keras import Model
+from tensorflow.keras.applications.vgg19 import VGG19
 from tensorflow import image, expand_dims
+import tensorflow as tf
+
+# Source: https://stackoverflow.com/questions/65484420/define-custom-loss-perceptual-loss-in-cnn-autoencoder-with-pre-train-vgg19-tenblock5_conv4']
+selected_layers = ["block1_conv1", "block2_conv2", "block3_conv3" , "block4_conv3", "block5_conv4"]
+selected_layer_weights = [1.0, 4.0 , 4.0 , 8.0 , 16.0]
+
+vgg = VGG19(weights='imagenet', include_top=False, input_shape=(64,64,3))
+vgg.trainable = False
+outputs = [vgg.get_layer(l).output for l in selected_layers]
+model = Model(vgg.input, outputs)
+
+@tf.function
+def perceptual_loss(input_image , reconstruct_image):
+    h1_list = model(input_image)
+    h2_list = model(reconstruct_image)
+
+    rc_loss = 0.0
+    for h1, h2, weight in zip(h1_list, h2_list, selected_layer_weights):
+        h1 = K.batch_flatten(h1)
+        h2 = K.batch_flatten(h2)
+        rc_loss = rc_loss + weight * K.sum(K.square(h1 - h2), axis=-1)
+
+    return rc_loss
 
 # Source: https://www.tensorflow.org/tensorboard/image_summaries#logging_arbitrary_image_data
 def plot_to_image(figure):
