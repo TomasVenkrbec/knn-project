@@ -34,6 +34,7 @@ def setup_environment():
 
     # Clear Keras cache, just in case
     tf.keras.backend.clear_session()
+    tf.config.run_functions_eagerly(True)
 
 def print_info():
     print("Using computer: " + os.uname()[1])

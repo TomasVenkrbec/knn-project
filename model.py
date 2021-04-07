@@ -1,20 +1,23 @@
 import tensorflow.keras.backend as K
 from tensorflow.keras import Model
-from tensorflow.keras.layers import Input, AveragePooling2D, UpSampling2D, Concatenate, Flatten, Dense
+from tensorflow.keras.layers import Input, AveragePooling2D, UpSampling2D, Concatenate, Flatten, Dense, LeakyReLU
 from tensorflow.keras.utils import plot_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.metrics import Mean, Accuracy
 from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.applications.vgg19 import VGG19
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from callbacks import ResultsGenerator
 from dataset import Dataset
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
-from utils import plot_to_image, image_grid
+from utils import plot_to_image, image_grid 
+import tensorflow.keras.backend as K
 import numpy as np
 import sys
+
 
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
 EXAMPLE_COUNT = 25 # Number of example images in Tensorboard
@@ -61,10 +64,8 @@ class DeOldify(Model):
         super().compile()
 
         # Prepare all metrics
-        self.d_real_loss_metric = Mean(name="d_real_loss_metric")
-        self.d_fake_loss_metric = Mean(name="d_fake_loss_metric")
-        self.d_real_accuracy_metric = Accuracy(name="d_real_accuracy_metric")
-        self.d_fake_accuracy_metric = Accuracy(name="d_fake_accuracy_metric")
+        self.d_loss_metric = Mean(name="d_loss_metric")
+        self.d_accuracy_metric = Accuracy(name="d_accuracy_metric")
         self.g_loss_metric = Mean(name="g_loss")
 
     def call(self, inputs, **kwargs):
@@ -72,7 +73,20 @@ class DeOldify(Model):
 
     @property
     def metrics(self):
-        return [self.d_real_loss_metric, self.d_fake_loss_metric, self.d_real_accuracy_metric, self.d_fake_accuracy_metric, self.g_loss_metric]
+        return [self.d_loss_metric, self.d_accuracy_metric, self.g_loss_metric]
+
+    # Content (perception) loss
+    # Author: Deepak Birla (https://gist.github.com/deepak112)
+    # Source: https://gist.github.com/deepak112/c76ed1dbbfa3eff1249493eadfd2b9b5
+    def vgg_loss(self, y_true, y_pred):
+        vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=(self.resolution, self.resolution, 3))
+        vgg19.trainable = False
+        for l in vgg19.layers:
+            l.trainable = False
+        model = Model(inputs=vgg19.input, outputs=vgg19.get_layer('block5_conv4').output)
+        model.trainable = False
+        
+        return K.mean(K.square(model(y_true) - model(y_pred)))
 
     def build_model(self):
         # Create models of both networks
@@ -83,29 +97,23 @@ class DeOldify(Model):
         self.optimizer_gen = Adam(lr=self.generator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
         self.optimizer_disc = Adam(lr=self.discriminator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
 
-        # Compile discriminator
+        # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
-
-        # Prepare inputs for combined model
-        greyscale_img = self.generator.input
-        image_output = self.generator(greyscale_img)
-        d_class = self.discriminator(image_output)
-
-        # Combine both models into one, where greyscale image is processed by generator and then is placed into discriminator
-        # Discriminator is not trainable in this model
-        self.discriminator.trainable = False
-        self.combined_model = Model(inputs=greyscale_img, outputs=d_class)
-        self.combined_model.compile(optimizer=self.optimizer_gen, loss=self.loss)
-        self.discriminator.trainable = True
-        plot_model(self.combined_model, to_file="combined_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
+        self.generator.compile(optimizer=self.optimizer_gen, loss=self.loss)
+        
+        # Print out models and save their structures to image file
+        self.generator.summary()
+        self.discriminator.summary()
+        plot_model(self.generator, to_file="gen_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
+        plot_model(self.discriminator, to_file="disc_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
 
     def create_generator(self):
         layer_outputs = [] # Outputs of last convolution in the "left side" of U-net, which will be copied to "right side" of U-net
 
         grayscale_img = Input(shape=(self.resolution, self.resolution, 1)) # Grayscale image
-        gen = ConvSN2D(self.filters_gen, kernel_size=3, padding="same")(grayscale_img)
+        gen = ConvSN2D(self.filters_gen, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(grayscale_img)
         gen = SelfAttention(self.filters_gen)(gen)
-        gen = ConvSN2D(self.filters_gen, kernel_size=3, padding="same")(gen)
+        gen = ConvSN2D(self.filters_gen, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
         gen = SelfAttention(self.filters_gen)(gen)
         layer_outputs.append(gen) # Will be connected to output layer later
 
@@ -115,9 +123,9 @@ class DeOldify(Model):
         # Create all layers in "left side" of U-net
         while resolution >= GENERATOR_MIN_RESOLUTION:
             gen = AveragePooling2D()(gen)
-            gen = ConvSN2D(filters, kernel_size=3, padding="same")(gen)
+            gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
             gen = SelfAttention(filters)(gen)
-            gen = ConvSN2D(filters, kernel_size=3, padding="same")(gen)
+            gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
             gen = SelfAttention(filters)(gen)
             
             # Take the output of this layer so it can be connected as input to "right side" of U-net
@@ -134,60 +142,61 @@ class DeOldify(Model):
         for left_side_out in reversed(layer_outputs[:-1]): # Skip the last layer output (we upscaled that already) and take layers in reverse
             # Upscale the output of previous layer and halve the filter count
             gen = UpSampling2D()(gen)
-            gen = ConvSN2D(filters, kernel_size=2, padding="same")(gen)
+            gen = ConvSN2D(filters, kernel_size=2, kernel_initializer='he_normal', padding="same")(gen)
             gen = SelfAttention(filters)(gen)
             
             # Concatenate the upscaled previous layer output with "left tree" output with the same resolution
             concat = Concatenate()([left_side_out, gen])
 
             # Convolution block
-            gen = ConvSN2D(filters, kernel_size=3, padding="same")(concat)
+            gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(concat)
             gen = SelfAttention(filters)(gen)
-            gen = ConvSN2D(filters, kernel_size=3, padding="same")(gen)
+            gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
             gen = SelfAttention(filters)(gen)
 
             # Next layer has twice the resolution and half the filters
             filters //= 2
         
         # Change the number of feature maps to 3, so we get final RGB image
-        output_gen = ConvSN2D(3, kernel_size=1, activation="tanh", padding="same")(gen)
+        output_gen = ConvSN2D(3, kernel_size=1, activation="tanh", kernel_initializer='he_normal', padding="same")(gen)
 
         # Create the generator model
         generator_model = Model(inputs=grayscale_img, outputs=output_gen)
-        generator_model.summary()
-        plot_model(generator_model, to_file="gen_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
         return generator_model
             
     def create_discriminator(self):
         rgb_img = Input(shape=(self.resolution, self.resolution, 3)) # RGB image
 
-        # Convolutional block with attention
-        disc = ConvSN2D(self.filters_disc, strides=2, kernel_size=3, padding="same")(rgb_img)
+        # Convolutional input block with attention
+        disc = ConvSN2D(self.filters_disc, strides=2, kernel_size=3, kernel_initializer='he_normal', padding="same")(rgb_img)
+        disc = LeakyReLU(0.2)(disc)
         disc = SelfAttention(self.filters_disc)(disc)
-        disc = ConvSN2D(self.filters_disc, kernel_size=3, padding="same")(disc)
+        disc = ConvSN2D(self.filters_disc, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
+        disc = LeakyReLU(0.2)(disc)
         disc = SelfAttention(self.filters_disc)(disc)
 
         resolution = self.resolution // 2
         filters = self.filters_disc * 2
         while resolution > 4:
-            disc = ConvSN2D(filters, strides=2, kernel_size=3, padding="same")(disc)
+            disc = ConvSN2D(filters, strides=2, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
+            disc = LeakyReLU(0.2)(disc)
             disc = SelfAttention(filters)(disc)
-            disc = ConvSN2D(filters, kernel_size=3, padding="same")(disc)
+            disc = ConvSN2D(filters, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
+            disc = LeakyReLU(0.2)(disc)
             disc = SelfAttention(filters)(disc)
             
             resolution //= 2 # Halve the resolution
             filters *= 2 # Twice the filters
         
         # Output block
-        disc = ConvSN2D(filters, kernel_size=4, padding="valid")(disc)
+        disc = ConvSN2D(filters, kernel_size=4, kernel_initializer='he_normal', padding="valid")(disc)
+        disc = LeakyReLU(0.2)(disc)
         disc = SelfAttention(filters)(disc)
         disc = Flatten()(disc)
         prob = Dense(1, activation='sigmoid')(disc)
 
         # Build the discriminator model
         discriminator_model = Model(inputs=rgb_img, outputs=prob)
-        discriminator_model.summary()
-        plot_model(discriminator_model, to_file="disc_model.png", show_shapes=True, show_dtype=True, show_layer_names=True)
         return discriminator_model
 
     # ImageNet (http://image-net.org/)
@@ -248,47 +257,40 @@ class DeOldify(Model):
         # Generate RGB images from grayscale ground truth
         generated_images = self.generator(grayscale_images)
 
+        # Combine them with real images
+        combined_images = np.concatenate([generated_images, real_images], axis=0)
+
         # Create labels for discriminator
-        labels_real = np.zeros((self.batch_size, 1))
+        labels_real = np.zeros((self.batch_size, 1))    
         labels_fake = np.ones((self.batch_size, 1))
+        labels_disc = np.concatenate([labels_fake, labels_real], axis=0)
 
         # Add random noise to labels
-        labels_real += 0.05 * np.random.uniform(size=labels_real.shape)
-        labels_fake -= 0.05 * np.random.uniform(size=labels_fake.shape)
+        labels_disc += 0.05 * np.random.uniform(size=labels_disc.shape)
 
-        # Train discriminator on real images
+        # Train discriminator
         with GradientTape() as tape:
-            predictions_real = self.discriminator(real_images)
-            d_real_loss = BinaryCrossentropy()(labels_real, predictions_real)
-        grads = tape.gradient(d_real_loss, self.discriminator.trainable_weights)
-        self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
-
-        # Train discriminator on fake images
-        with GradientTape() as tape:
-            predictions_fake = self.discriminator(generated_images)
-            d_fake_loss = BinaryCrossentropy()(labels_fake, predictions_fake)
-        grads = tape.gradient(d_fake_loss, self.discriminator.trainable_weights)
+            predictions_disc = self.discriminator(combined_images)
+            d_loss = BinaryCrossentropy()(labels_disc, predictions_disc)
+        grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
         self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
 
         # Train generator in combined model
-        labels_real = np.zeros((self.batch_size, 1)) # Initialize again, because we don't want noise in generator
         with GradientTape() as tape:
-            predictions_gen = self.combined_model(grayscale_images)
-            g_loss = BinaryCrossentropy()(labels_real, predictions_gen)
-        grads = tape.gradient(g_loss, self.combined_model.trainable_weights)
-        self.optimizer_gen.apply_gradients(zip(grads, self.combined_model.trainable_weights))
+            predictions_gen = self.discriminator(self.generator(grayscale_images))
+            g_loss_bce = BinaryCrossentropy()(labels_real, predictions_gen)
+            g_loss_vgg = self.vgg_loss(real_images, generated_images)
+            g_loss = math.add(g_loss_bce, g_loss_vgg)
+        grads = tape.gradient(g_loss, self.generator.trainable_weights)
+        self.optimizer_gen.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         # Update metrics
-        self.d_real_loss_metric.update_state(d_real_loss)
-        self.d_fake_loss_metric.update_state(d_fake_loss)
-        self.d_real_accuracy_metric.update_state(np.around(labels_real), math.round(predictions_real))
-        self.d_fake_accuracy_metric.update_state(np.around(labels_fake), math.round(predictions_fake))
+        self.d_loss_metric.update_state(d_loss)
+        self.d_accuracy_metric.update_state(np.around(labels_disc), math.round(predictions_disc))
         self.g_loss_metric.update_state(g_loss)
 
         return {
-            "d_real_loss": self.d_real_loss_metric.result(),
-            "d_fake_loss": self.d_fake_loss_metric.result(),
-            "d_real_accuracy": self.d_real_accuracy_metric.result(),
-            "d_fake_accuracy": self.d_fake_accuracy_metric.result(),
+            "d_loss": self.d_loss_metric.result(),
+            "d_accuracy": self.d_accuracy_metric.result(),
             "g_loss": self.g_loss_metric.result()
         }
