@@ -30,7 +30,7 @@ class Dataset:
         self.y_val = None
 
     # Note: We could possibly try to add labels later, that probably would make network work better
-    def batch_provider(self, batch_size, train=True):
+    def batch_provider(self, batch_size, train=True, convert_range=True):
         while True:
             if train:
                 indices = np.random.randint(0, len(self.x_train), batch_size)
@@ -42,6 +42,12 @@ class Dataset:
                 batch_samples = np.array(self.x_val[indices], dtype=np.uint8)
                 batch_targets = np.array(self.y_val[indices], dtype=np.uint8)
                 grayscale_images = convert_all_imgs_to_grayscale(self.x_val[indices])
+                        
+            # Convert images to <-1;1> range from <0;255> range
+            if convert_range:
+                batch_samples = (batch_samples - 127.5) / 127.5
+                grayscale_images = (grayscale_images - 127.5) / 127.5
+
             yield batch_samples, batch_targets, grayscale_images
 
     def get_input_img(self, x):
@@ -115,11 +121,11 @@ class Dataset:
 
     @property
     def train_data(self):
-        return (self.x_train, self.y_train)
+        return self.x_train, self.y_train
 
     @property
     def val_data(self):
-        return (self.x_val, self.y_val)
+        return self.x_val, self.y_val
 
     @property
     def train_count(self):

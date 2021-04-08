@@ -9,7 +9,7 @@ from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from callbacks import ResultsGenerator
-from dataset import Dataset
+from dataset import Dataset, convert_all_imgs_to_grayscale
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
 from utils import plot_to_image, image_grid, perceptual_loss
@@ -29,6 +29,7 @@ class DeOldify(Model):
                 generator_lr=0.0001, 
                 discriminator_lr=0.0004,
                 batch_size=2,
+                val_batches=100,
                 epochs=100,
                 output_frequency=50,
                 output_count=36,
@@ -42,6 +43,7 @@ class DeOldify(Model):
         self.weights_path = None
         self.starting_epoch = 0
         self.batch_size = batch_size
+        self.val_batches = val_batches
         self.epochs = epochs
         self.output_frequency = output_frequency
         self.output_count = output_count
@@ -60,20 +62,33 @@ class DeOldify(Model):
         self.beta_1 = beta_1
         self.beta_2 = beta_2
 
+        # Prepare labels for training (they are the same for all training steps), so we don't have to generate them every time
+        self.labels_real = np.zeros((self.batch_size, 1))    
+        self.labels_fake = np.ones((self.batch_size, 1))
+        self.labels_disc = np.concatenate([self.labels_fake, self.labels_real], axis=0)
+
     def compile(self):
         super().compile()
 
-        # Prepare all metrics
-        self.d_loss_metric = Mean(name="d_loss_metric")
-        self.d_accuracy_metric = Accuracy(name="d_accuracy_metric")
-        self.g_loss_metric = Mean(name="g_loss")
+        # Prepare all train metrics
+        self.d_train_loss_metric = Mean(name="d_train_loss_metric")
+        self.d_train_accuracy_metric = Accuracy(name="d_train_accuracy_metric")
+        self.g_train_loss_bce_metric = Mean(name="g_train_bce_loss_metric")
+        self.g_train_loss_vgg_metric = Mean(name="g_train_vgg_loss_metric")
+        
+        # Prepare all validation metrics
+        self.d_val_loss_metric = Mean(name="d_val_loss_metric")
+        self.d_val_accuracy_metric = Accuracy(name="d_val_accuracy_metric")
+        self.g_val_loss_bce_metric = Mean(name="g_val_loss_bce_metric")
+        self.g_val_loss_vgg_metric = Mean(name="g_val_loss_vgg_metric")
 
     def call(self, inputs, **kwargs):
         return None
 
     @property
     def metrics(self):
-        return [self.d_loss_metric, self.d_accuracy_metric, self.g_loss_metric]
+        return [self.d_train_loss_metric, self.d_train_accuracy_metric, self.g_train_loss_bce_metric, self.g_train_loss_vgg_metric,
+                self.d_val_loss_metric, self.d_val_accuracy_metric, self.g_val_loss_bce_metric, self.g_val_loss_vgg_metric]
 
     def build_model(self):
         # Create models of both networks
@@ -217,8 +232,8 @@ class DeOldify(Model):
         val_gen = self.dataset.batch_provider(self.batch_size, train=False)
 
         # Add train and val image sample to Tensorboard
-        train_gt_sample, _, train_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT))
-        val_gt_sample, _, val_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, train=False))
+        train_gt_sample, _, train_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, convert_range=False))
+        val_gt_sample, _, val_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, train=False, convert_range=False))
         self.file_writer = summary.create_file_writer(self.logdir+"/train/plots")
         with self.file_writer.as_default(step=0):
             summary.image("Training data ground truth examples", plot_to_image(image_grid(train_gt_sample)), max_outputs=EXAMPLE_COUNT)
@@ -234,16 +249,34 @@ class DeOldify(Model):
         epoch_batches = self.dataset.train_count//self.batch_size
         
         # Train the model
-        self.fit(train_gen, batch_size=self.batch_size, epochs=self.epochs, callbacks=[results_callback, tensorboard_callback], steps_per_epoch=epoch_batches)
+        self.fit(train_gen, batch_size=self.batch_size, 
+                            epochs=self.epochs, 
+                            initial_epoch=self.starting_epoch,
+                            callbacks=[results_callback, tensorboard_callback], 
+                            steps_per_epoch=epoch_batches,
+                            validation_data=self.dataset.val_data,
+                            validation_steps=self.val_batches)
+
+    def generator_step(self, input_image, training=True):
+        # Run generator
+        generated_images = self.generator(input_image, training=training)
+        predictions_gen = self.discriminator(generated_images, training=training)
+        g_loss_bce = BinaryCrossentropy()(self.labels_real, predictions_gen)
+
+        # We use VGG to force network to output the same image, but colored,
+        # so we take input grayscale images and output image converted to grayscale and measure the loss
+        # Images need to have 3 channels in order to work with VGG, so we stack the single grey channel 
+        grayscale_images_vgg = tf.image.grayscale_to_rgb(K.cast(input_image, "float32"))
+        generated_images_vgg = tf.image.rgb_to_grayscale(generated_images)
+        generated_images_vgg = tf.image.grayscale_to_rgb(generated_images_vgg)
+        g_loss_vgg = tf.reduce_mean(perceptual_loss(grayscale_images_vgg, generated_images_vgg))
+        
+        return g_loss_bce, g_loss_vgg 
 
     # Inspiration: https://keras.io/examples/generative/dcgan_overriding_train_step/
     def train_step(self, data):
         # Get image and labels
         real_images, labels, grayscale_images = data
-        
-        # Convert images to <-1;1> range
-        real_images = (K.cast(real_images, "float32") - 127.5) / 127.5 
-        grayscale_images = (K.cast(grayscale_images, "float32") - 127.5) / 127.5
 
         # Generate RGB images from grayscale ground truth
         generated_images = self.generator(grayscale_images)
@@ -251,49 +284,70 @@ class DeOldify(Model):
         # Combine them with real images
         combined_images = tf.concat([generated_images, real_images], axis=0)
 
-        # Create labels for discriminator
-        labels_real = np.zeros((self.batch_size, 1))    
-        labels_fake = np.ones((self.batch_size, 1))
-        labels_disc = np.concatenate([labels_fake, labels_real], axis=0)
-
         # Train discriminator
         with GradientTape() as tape:
             predictions_disc = self.discriminator(combined_images)
-            d_loss = BinaryCrossentropy(label_smoothing=0.1)(labels_disc, predictions_disc)
+            d_loss = BinaryCrossentropy(label_smoothing=0.1)(self.labels_disc, predictions_disc)
         grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
         self.optimizer_disc.apply_gradients(zip(grads, self.discriminator.trainable_weights))
 
         # Get new batch of images for generator training
-        real_images, labels, grayscale_images = next(self.dataset.batch_provider(self.batch_size))
-        
-        # Convert images to <-1;1> range
-        real_images = (K.cast(real_images, "float32") - 127.5) / 127.5 
-        grayscale_images = (K.cast(grayscale_images, "float32") - 127.5) / 127.5
+        _, labels, grayscale_images = next(self.dataset.batch_provider(self.batch_size))
         
         # Train generator
         with GradientTape() as tape:
-            generated_images = self.generator(grayscale_images)
-            predictions_gen = self.discriminator(generated_images)
-            g_loss_bce = BinaryCrossentropy()(labels_real, predictions_gen)
-
-            # We use VGG to force network to output the same image, but colored,
-            # so we take input grayscale images and output image converted to grayscale and measure the loss
-            # Images need to have 3 channels in order to work with VGG, so we stack the single grey channel 
-            grayscale_images_vgg = tf.image.grayscale_to_rgb(grayscale_images)
-            generated_images_vgg = tf.image.rgb_to_grayscale(generated_images)
-            generated_images_vgg = tf.image.grayscale_to_rgb(generated_images_vgg)
-            g_loss_vgg = perceptual_loss(grayscale_images_vgg, generated_images_vgg)
-            g_loss = g_loss_bce + tf.reduce_mean(g_loss_vgg)
-        grads = tape.gradient(g_loss_vgg, self.generator.trainable_weights)
+            g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images)
+            g_loss = g_loss_bce + g_loss_vgg
+        grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.optimizer_gen.apply_gradients(zip(grads, self.generator.trainable_weights))
 
         # Update metrics
-        self.d_loss_metric.update_state(d_loss)
-        self.d_accuracy_metric.update_state(np.around(labels_disc), math.round(predictions_disc))
-        self.g_loss_metric.update_state(g_loss)
+        self.d_train_loss_metric.update_state(d_loss)
+        self.d_train_accuracy_metric.update_state(np.around(self.labels_disc), math.round(predictions_disc))
+        self.g_train_loss_bce_metric.update_state(g_loss_bce)
+        self.g_train_loss_vgg_metric.update_state(g_loss_vgg)
 
         return {
-            "d_loss": d_loss,
-            "d_accuracy": self.d_accuracy_metric.result(),
-            "g_loss": g_loss
+            "d_train_loss": d_loss,
+            "d_train_accuracy": self.d_train_accuracy_metric.result(),
+            "g_train_loss_vgg": g_loss_vgg,
+            "g_train_loss_bce": g_loss_bce
+        }
+    
+    def test_step(self, data):
+        # Get input and labels for networks
+        # Since we cant use generator for validation data, we have to convert our data manually
+        real_images, labels = data
+        real_images = real_images.numpy()
+        
+        # Create grayscale data
+        grayscale_images = convert_all_imgs_to_grayscale(real_images)
+        
+        # Scale data to <-1;1>
+        real_images = (real_images - 127.5) / 127.5 
+        grayscale_images = (grayscale_images - 127.5) / 127.5
+
+        # Convert ground truth to float32 tensor so it's the same type as generator output and can be concatenated to make discriminator input
+        real_images = tf.convert_to_tensor(real_images, "float32")
+        generated_images = self.generator(grayscale_images, training=False)
+        combined_images = tf.concat([generated_images, real_images], axis=0)
+
+        # Run discriminator
+        predictions_disc = self.discriminator(combined_images, training=False)
+        d_loss = BinaryCrossentropy()(self.labels_disc, predictions_disc)
+
+        # Run generator
+        g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images)
+
+        # Update metrics
+        self.d_val_loss_metric.update_state(d_loss)
+        self.d_val_accuracy_metric.update_state(self.labels_disc, predictions_disc)
+        self.g_val_loss_bce_metric.update_state(g_loss_bce)
+        self.g_val_loss_vgg_metric.update_state(g_loss_vgg)
+
+        return {
+            "d_val_loss": self.d_val_loss_metric.result(),
+            "d_val_accuracy": self.d_val_accuracy_metric.result(),
+            "g_val_loss_bce": self.g_val_loss_bce_metric.result(),
+            "g_val_loss_vgg": self.g_val_loss_vgg_metric.result()
         }

@@ -19,11 +19,10 @@ class ResultsGenerator(Callback):
         # Generate inputs for generator without ground truths, will not change over time
         _, _, self.bw_sample_no_gt = next(dataset.batch_provider(img_count, train=False))
 
-        # Convert black and white inputs to <-1;1> range
-        self.bw_sample = (self.bw_sample - 127.5) / 127.5
-        self.bw_sample_no_gt = (self.bw_sample_no_gt - 127.5) / 127.5
+        # Convert ground truth image to <0;255> range
+        self.gt_sample = self.gt_sample * 127.5 + 127.5
 
-    def on_batch_end(self, batch, logs=None):
+    def on_batch_start(self, batch, logs=None):
         if batch % self.output_frequency == 0:
             # Generate the images 
             generated_images_gt = self.generator.predict(self.bw_sample)
