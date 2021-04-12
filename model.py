@@ -28,7 +28,8 @@ class DeOldify(Model):
                 filters_disc=16, 
                 generator_lr=0.0001, 
                 discriminator_lr=0.0004,
-                batch_size=2,
+                batch_size=8,
+                attention_res=32,
                 val_batches=100,
                 epochs=100,
                 output_frequency=50,
@@ -43,6 +44,7 @@ class DeOldify(Model):
         self.weights_path = None
         self.starting_epoch = 0
         self.batch_size = batch_size
+        self.attention_res = attention_res
         self.val_batches = val_batches
         self.epochs = epochs
         self.output_frequency = output_frequency
@@ -114,9 +116,9 @@ class DeOldify(Model):
 
         grayscale_img = Input(shape=(self.resolution, self.resolution, 1)) # Grayscale image
         gen = ConvSN2D(self.filters_gen, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(grayscale_img)
-        gen = SelfAttention(self.filters_gen)(gen)
         gen = ConvSN2D(self.filters_gen, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
-        gen = SelfAttention(self.filters_gen)(gen)
+        if self.attention_res == self.resolution:
+            gen = SelfAttention(self.filters_gen)(gen)
         layer_outputs.append(gen) # Will be connected to output layer later
 
         filters = self.filters_gen * 2
@@ -126,9 +128,9 @@ class DeOldify(Model):
         while resolution >= GENERATOR_MIN_RESOLUTION:
             gen = AveragePooling2D()(gen)
             gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
-            gen = SelfAttention(filters)(gen)
             gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
-            gen = SelfAttention(filters)(gen)
+            if self.attention_res == resolution:
+                gen = SelfAttention(filters)(gen)
             
             # Take the output of this layer so it can be connected as input to "right side" of U-net
             layer_outputs.append(gen)
@@ -145,16 +147,15 @@ class DeOldify(Model):
             # Upscale the output of previous layer and halve the filter count
             gen = UpSampling2D()(gen)
             gen = ConvSN2D(filters, kernel_size=2, kernel_initializer='he_normal', padding="same")(gen)
-            gen = SelfAttention(filters)(gen)
-            
+
             # Concatenate the upscaled previous layer output with "left tree" output with the same resolution
             concat = Concatenate()([left_side_out, gen])
 
             # Convolution block
             gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(concat)
-            gen = SelfAttention(filters)(gen)
             gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
-            gen = SelfAttention(filters)(gen)
+            if self.attention_res == resolution:
+                gen = SelfAttention(filters)(gen)
 
             # Next layer has twice the resolution and half the filters
             filters //= 2
@@ -172,20 +173,20 @@ class DeOldify(Model):
         # Convolutional input block with attention
         disc = ConvSN2D(self.filters_disc, strides=2, kernel_size=3, kernel_initializer='he_normal', padding="same")(rgb_img)
         disc = LeakyReLU(0.2)(disc)
-        disc = SelfAttention(self.filters_disc)(disc)
         disc = ConvSN2D(self.filters_disc, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
         disc = LeakyReLU(0.2)(disc)
-        disc = SelfAttention(self.filters_disc)(disc)
+        if self.attention_res == self.resolution:
+            disc = SelfAttention(self.filters_disc)(disc)
 
         resolution = self.resolution // 2
         filters = self.filters_disc * 2
         while resolution > 4:
             disc = ConvSN2D(filters, strides=2, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
             disc = LeakyReLU(0.2)(disc)
-            disc = SelfAttention(filters)(disc)
             disc = ConvSN2D(filters, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
             disc = LeakyReLU(0.2)(disc)
-            disc = SelfAttention(filters)(disc)
+            if self.attention_res == resolution:
+                disc = SelfAttention(filters)(disc)
             
             resolution //= 2 # Halve the resolution
             filters *= 2 # Twice the filters
@@ -193,7 +194,6 @@ class DeOldify(Model):
         # Output block
         disc = ConvSN2D(filters, kernel_size=4, kernel_initializer='he_normal', padding="valid")(disc)
         disc = LeakyReLU(0.2)(disc)
-        disc = SelfAttention(filters)(disc)
         disc = Flatten()(disc)
         prob = Dense(1, activation='sigmoid')(disc)
 
