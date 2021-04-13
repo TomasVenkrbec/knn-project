@@ -8,10 +8,10 @@ Project is based on original [DeOldify](https://github.com/dana-kelley/DeOldify)
  - Dvořák Jiří ([xdvora2u](mailto:xdvora2u@stud.fit.vutbr.cz))
 
 ## Quickstart guide
- 1. Pull this repository to local machine: `git pull https://github.com/TomasVenkrbec/knn-project.git`
+ 1. Pull this repository to local machine: `git pull https://github.com/TomasVenkrbec/knn-project`
  2. Run the install script: `chmod +x install.sh && . install.sh`
     * For quick access to python virtual environment, use `. path.sh` next time.
- 3. Start the main script: `python3 run.sh`
+ 3. Start the main script: `python3 run.py`
     * For list of available arguments, run the script with `-h` argument
 
 ## Requirements / Tested on
