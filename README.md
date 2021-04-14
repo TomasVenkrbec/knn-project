@@ -7,6 +7,11 @@ Project is based on original [DeOldify](https://github.com/dana-kelley/DeOldify)
  - Fořtová Kateřina ([xforto00](mailto:xforto00@stud.fit.vutbr.cz))
  - Dvořák Jiří ([xdvora2u](mailto:xdvora2u@stud.fit.vutbr.cz))
 
+## Results
+Examples of colorized images are shown in `results` folder.
+
+*Note: Project is currently under development and therefore these results only represent the current state of project, not the project in its final form.*
+
 ## Quickstart guide
  1. Pull this repository to local machine: `git pull https://github.com/TomasVenkrbec/knn-project`
  2. Run the install script: `chmod +x install.sh && . install.sh`
@@ -19,4 +24,4 @@ Project is based on original [DeOldify](https://github.com/dana-kelley/DeOldify)
  - Tensorflow 2.4.1
  - [ImageNet](http://image-net.org/) dataset (preferably downscaled 64x64 version)
 
-![Swish swoosh](swish.jpg "Swish swoosh")
+![Swish swoosh](swish.jpg "Swish swoosh")z
