@@ -9,7 +9,7 @@ from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from callbacks import ResultsGenerator
-from dataset import Dataset, convert_all_imgs_to_grayscale
+from dataset import Dataset, convert_all_imgs_to_grayscale, rgb2gray
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
 from utils import plot_to_image, image_grid, perceptual_loss
@@ -17,6 +17,10 @@ import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
 import sys
+import os 
+from PIL import Image
+import glob
+import matplotlib.pyplot as plt
 
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
 EXAMPLE_COUNT = 25 # Number of example images in Tensorboard
@@ -68,6 +72,11 @@ class DeOldify(Model):
         self.labels_real = np.zeros((self.batch_size, 1))    
         self.labels_fake = np.ones((self.batch_size, 1))
         self.labels_disc = np.concatenate([self.labels_fake, self.labels_real], axis=0)
+
+
+        # path to save model checkpoint during training
+        self.checkpoint_path = "./snapshots/cp-{epoch:04d}.ckpt"
+        self.checkpoint_dir = os.path.dirname(self.checkpoint_path)
 
     def compile(self):
         super().compile()
@@ -212,7 +221,18 @@ class DeOldify(Model):
     
     # TODO: Colorize images that were placed in 'images_to_colorize' folder and quit, colorized images are placed into 'results' folder
     def colorize_selected_images(self):
-        pass
+        my_images_to_colorize_path = os.path.abspath(os.getcwd()) + "/images_to_colorize/*" # load images from user to colorize
+
+        for file in glob.glob(my_images_to_colorize_path):
+          image = Image.open(file)
+          image = image.resize((self.resolution, self.resolution)) # resize to resolution on which was net trained 
+          data = np.asarray(image)
+          grayscale_img = rgb2gray(data) 
+          print(grayscale_img.shape)
+          plt.imshow(grayscale_img, cmap="gray")
+          plt.show()
+
+        
     
     # Initialize variables regarding training continuation 
     def prepare_snapshot_load(self, starting_epoch, weights_path):
@@ -227,6 +247,13 @@ class DeOldify(Model):
         # Create Tensorboard callback and set Tensorboard log folder name
         tensorboard_callback = TensorBoard(log_dir=self.logdir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
         
+        # save whole model during training for each epoch 
+        cp_callback = tf.keras.callbacks.ModelCheckpoint(
+                filepath=self.checkpoint_path, 
+                verbose=1, 
+                save_weights_only=False,
+                save_freq=1*self.batch_size)
+
         # Get train and validation batch generators
         train_gen = self.dataset.batch_provider(self.batch_size)
         val_gen = self.dataset.batch_provider(self.batch_size, train=False)
@@ -252,10 +279,15 @@ class DeOldify(Model):
         self.fit(train_gen, batch_size=self.batch_size, 
                             epochs=self.epochs, 
                             initial_epoch=self.starting_epoch,
-                            callbacks=[results_callback, tensorboard_callback], 
+                            callbacks=[results_callback, tensorboard_callback, cp_callback], 
                             steps_per_epoch=epoch_batches,
                             validation_data=self.dataset.val_data,
                             validation_steps=self.val_batches)
+
+        # save final processed trained model 
+        #self.save(os.path.abspath(os.getcwd()) + "/snapshots/my_model")
+        # save final weights of trained model 
+        self.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights")
 
     def generator_step(self, input_image, training=True):
         # Run generator

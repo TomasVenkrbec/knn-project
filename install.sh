@@ -14,3 +14,4 @@ mkdir dataset/ImageNet
 mkdir dataset/CIFAR-100
 mkdir images_to_colorize/
 mkdir results/
+mkdir snapshots/

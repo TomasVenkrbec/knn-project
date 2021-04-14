@@ -6,3 +6,4 @@ gen_model.png
 disc_model.png
 combined_model.png
 logs/*
+snapshots/*
