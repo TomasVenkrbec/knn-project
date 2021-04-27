@@ -75,8 +75,8 @@ class DeOldify(Model):
 
 
         # path to save model checkpoint during training
-        self.checkpoint_path_generator = "./snapshots/cpgen-{epoch:04d}.ckpt"
-        self.checkpoint_path_discriminator = "./snapshots/cpdis-{epoch:04d}.ckpt"
+        self.checkpoint_path_generator = "./snapshots/generator_weights.ckpt"
+        self.checkpoint_path_discriminator = "./snapshots/discriminator_weights.ckpt"
         self.checkpoint_dir = os.path.dirname(self.checkpoint_path_generator)
 
     def compile(self):
@@ -106,6 +106,11 @@ class DeOldify(Model):
         # Create models of both networks
         self.generator = self.create_generator()
         self.discriminator = self.create_discriminator()
+
+        if (self.load_weights == True):
+          print("LOADING WEIGHTS FROM SNAPSHOT")
+          self.generator.load_weights(self.weights_path + "generator_weights.ckpt")
+          self.discriminator.load_weights(self.weights_path + "discriminator_weights.ckpt")
 
         # Optimizer settings
         self.optimizer_gen = Adam(lr=self.generator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
@@ -252,16 +257,14 @@ class DeOldify(Model):
         cp_callback_generator = tf.keras.callbacks.ModelCheckpoint(
                 filepath=self.checkpoint_path_generator, 
                 verbose=1, 
-                save_weights_only=True,
-                save_freq=1*self.batch_size)
+                save_weights_only=True)
         
         cp_callback_generator.set_model(self.generator)
 
         cp_callback_discriminator = tf.keras.callbacks.ModelCheckpoint(
                 filepath=self.checkpoint_path_discriminator, 
                 verbose=1, 
-                save_weights_only=True,
-                save_freq=1*self.batch_size)
+                save_weights_only=True)
         
         cp_callback_discriminator.set_model(self.discriminator)
 
@@ -298,8 +301,8 @@ class DeOldify(Model):
         # save final processed trained model 
         #self.save(os.path.abspath(os.getcwd()) + "/snapshots/my_model")
         # save final weights of trained model 
-        self.generator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights_generator")
-        self.discriminator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights_discriminator")
+        #self.generator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights_generator")
+        #self.discriminator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights_discriminator")
 
     def generator_step(self, input_image, training=True):
         # Run generator
