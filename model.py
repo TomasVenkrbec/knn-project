@@ -9,6 +9,7 @@ from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
 from callbacks import ResultsGenerator
+from snapshot_callback import SnapshotCallback
 from dataset import Dataset, convert_all_imgs_to_grayscale, rgb2gray
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
@@ -107,14 +108,14 @@ class DeOldify(Model):
         self.generator = self.create_generator()
         self.discriminator = self.create_discriminator()
 
-        if (self.load_weights == True):
-          print("LOADING WEIGHTS FROM SNAPSHOT")
-          self.generator.load_weights(self.weights_path + "generator_weights.ckpt")
-          self.discriminator.load_weights(self.weights_path + "discriminator_weights.ckpt")
-
         # Optimizer settings
         self.optimizer_gen = Adam(lr=self.generator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
         self.optimizer_disc = Adam(lr=self.discriminator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
+
+        if (self.load_weights == True):
+          print("LOADING WEIGHTS FROM SNAPSHOT")
+          self.generator.load_weights(self.weights_path + "generator_weights.ckpt").expect_partial()
+          self.discriminator.load_weights(self.weights_path + "discriminator_weights.ckpt").expect_partial()
 
         # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
@@ -253,6 +254,7 @@ class DeOldify(Model):
         # Create Tensorboard callback and set Tensorboard log folder name
         tensorboard_callback = TensorBoard(log_dir=self.logdir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
         
+        '''
         # save whole model during training for each epoch 
         cp_callback_generator = tf.keras.callbacks.ModelCheckpoint(
                 filepath=self.checkpoint_path_generator, 
@@ -267,6 +269,7 @@ class DeOldify(Model):
                 save_weights_only=True)
         
         cp_callback_discriminator.set_model(self.discriminator)
+        '''
 
         # Get train and validation batch generators
         train_gen = self.dataset.batch_provider(self.batch_size)
@@ -288,12 +291,14 @@ class DeOldify(Model):
 
         # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
         epoch_batches = self.dataset.train_count//self.batch_size
+
+        snapshot_callback = SnapshotCallback(self.generator, self.discriminator)
         
         # Train the model
         self.fit(train_gen, batch_size=self.batch_size, 
                             epochs=self.epochs, 
                             initial_epoch=self.starting_epoch,
-                            callbacks=[results_callback, tensorboard_callback, cp_callback_generator, cp_callback_discriminator], 
+                            callbacks=[results_callback, tensorboard_callback, snapshot_callback], 
                             steps_per_epoch=epoch_batches,
                             validation_data=self.dataset.val_data,
                             validation_steps=self.val_batches)
@@ -301,8 +306,8 @@ class DeOldify(Model):
         # save final processed trained model 
         #self.save(os.path.abspath(os.getcwd()) + "/snapshots/my_model")
         # save final weights of trained model 
-        #self.generator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights_generator")
-        #self.discriminator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/saved_final_weights_discriminator")
+        #self.generator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/generator_weights.ckpt")
+        #self.discriminator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/discriminator_weights.ckpt")
 
     def generator_step(self, input_image, training=True):
         # Run generator
