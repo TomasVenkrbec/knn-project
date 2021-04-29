@@ -114,8 +114,8 @@ class DeOldify(Model):
 
         if (self.load_weights == True):
           print("LOADING WEIGHTS FROM SNAPSHOT")
-          self.generator.load_weights(self.weights_path + "generator_weights.ckpt").expect_partial()
-          self.discriminator.load_weights(self.weights_path + "discriminator_weights.ckpt").expect_partial()
+          self.generator.load_weights(self.weights_path + "generator_weights.ckpt")
+          self.discriminator.load_weights(self.weights_path + "discriminator_weights.ckpt")
 
         # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
