@@ -239,13 +239,13 @@ class DeOldify(Model):
             data = np.asarray(image)
             grayscale_img = rgb2gray(data) # generator receives grayscale image
             grayscale_img = (grayscale_img - 127.5) / 127.5 # transform to range <-1,1> for
-            grayscale_img = grayscale_img.reshape(1, 64, 64, 1)
+            grayscale_img = grayscale_img.reshape(1, self.resolution, self.resolution, 1)
 
 
             predicted_result = self.generator.predict(grayscale_img) # predict with pretrained generator
             predicted_result = predicted_result * 127.5 + 127.5 # Convert to <0;255> range
             predicted_result = predicted_result.astype(np.uint8)
-            predicted_result = predicted_result.reshape(64, 64, 3)
+            predicted_result = predicted_result.reshape(self.resolution, self.resolution, 3)
 
             # save colorized result of grayscale input img into results folder
             plt.imsave("./results/" + file_substr + "_colorized.png", predicted_result)
