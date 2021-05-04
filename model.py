@@ -18,7 +18,7 @@ import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
 import sys
-import os 
+import os
 from PIL import Image
 import glob
 import matplotlib.pyplot as plt
@@ -27,11 +27,11 @@ GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
 EXAMPLE_COUNT = 25 # Number of example images in Tensorboard
 
 class DeOldify(Model):
-    def __init__(self, 
-                resolution=64, 
-                filters_gen=32, 
-                filters_disc=16, 
-                generator_lr=0.0001, 
+    def __init__(self,
+                resolution=64,
+                filters_gen=32,
+                filters_disc=16,
+                generator_lr=0.0001,
                 discriminator_lr=0.0004,
                 batch_size=8,
                 attention_res=32,
@@ -40,7 +40,7 @@ class DeOldify(Model):
                 output_frequency=50,
                 output_count=36,
                 logdir="logs",
-                beta_1=0, 
+                beta_1=0,
                 beta_2=0.9):
         super().__init__()
 
@@ -54,7 +54,7 @@ class DeOldify(Model):
         self.epochs = epochs
         self.output_frequency = output_frequency
         self.output_count = output_count
-        self.logdir = logdir + "/" + datetime.now().strftime("%Y%m%d-%H%M%S") 
+        self.logdir = logdir + "/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Network-related settings
         self.resolution = resolution # Resolution of train images
@@ -70,7 +70,7 @@ class DeOldify(Model):
         self.beta_2 = beta_2
 
         # Prepare labels for training (they are the same for all training steps), so we don't have to generate them every time
-        self.labels_real = np.zeros((self.batch_size, 1))    
+        self.labels_real = np.zeros((self.batch_size, 1))
         self.labels_fake = np.ones((self.batch_size, 1))
         self.labels_disc = np.concatenate([self.labels_fake, self.labels_real], axis=0)
 
@@ -88,7 +88,7 @@ class DeOldify(Model):
         self.d_train_accuracy_metric = Accuracy(name="d_train_accuracy_metric")
         self.g_train_loss_bce_metric = Mean(name="g_train_bce_loss_metric")
         self.g_train_loss_vgg_metric = Mean(name="g_train_vgg_loss_metric")
-        
+
         # Prepare all validation metrics
         self.d_val_loss_metric = Mean(name="d_val_loss_metric")
         self.d_val_accuracy_metric = Accuracy(name="d_val_accuracy_metric")
@@ -120,7 +120,7 @@ class DeOldify(Model):
         # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
         self.generator.compile(optimizer=self.optimizer_gen, loss=[self.loss, self.loss_gen])
-        
+
         # Print out models and save their structures to image file
         self.generator.summary()
         self.discriminator.summary()
@@ -147,7 +147,7 @@ class DeOldify(Model):
             gen = ConvSN2D(filters, kernel_size=3, activation="relu", kernel_initializer='he_normal', padding="same")(gen)
             if self.attention_res == resolution:
                 gen = SelfAttention(filters)(gen)
-            
+
             # Take the output of this layer so it can be connected as input to "right side" of U-net
             layer_outputs.append(gen)
 
@@ -175,14 +175,14 @@ class DeOldify(Model):
 
             # Next layer has twice the resolution and half the filters
             filters //= 2
-        
+
         # Change the number of feature maps to 3, so we get final RGB image
         output_gen = ConvSN2D(3, kernel_size=1, activation="tanh", kernel_initializer='he_normal', padding="same")(gen)
 
         # Create the generator model
         generator_model = Model(inputs=grayscale_img, outputs=output_gen)
         return generator_model
-            
+
     def create_discriminator(self):
         rgb_img = Input(shape=(self.resolution, self.resolution, 3)) # RGB image
 
@@ -203,10 +203,10 @@ class DeOldify(Model):
             disc = LeakyReLU(0.2)(disc)
             if self.attention_res == resolution:
                 disc = SelfAttention(filters)(disc)
-            
+
             resolution //= 2 # Halve the resolution
             filters *= 2 # Twice the filters
-        
+
         # Output block
         disc = ConvSN2D(filters, kernel_size=4, kernel_initializer='he_normal', padding="valid")(disc)
         disc = LeakyReLU(0.2)(disc)
@@ -225,23 +225,33 @@ class DeOldify(Model):
         else:
             print("ERROR: Selected invalid dataset.")
             sys.exit(1)
-    
-    # TODO: Colorize images that were placed in 'images_to_colorize' folder and quit, colorized images are placed into 'results' folder
+
+    # Colorize images that were placed in 'images_to_colorize' folder and quit, colorized images are placed into 'results' folder
     def colorize_selected_images(self):
         my_images_to_colorize_path = os.path.abspath(os.getcwd()) + "/images_to_colorize/*" # load images from user to colorize
 
+        # loop through user images to colorize
         for file in glob.glob(my_images_to_colorize_path):
-          image = Image.open(file)
-          image = image.resize((self.resolution, self.resolution)) # resize to resolution on which was net trained 
-          data = np.asarray(image)
-          grayscale_img = rgb2gray(data) 
-          print(grayscale_img.shape)
-          plt.imshow(grayscale_img, cmap="gray")
-          plt.show()
+            file_substr = file.split('/')[-1] # get name of processed file
+            file_substr = file_substr[0:file_substr.rfind('.')] # cut extension of input image
+            image = Image.open(file)
+            image = image.resize((self.resolution, self.resolution)) # resize to resolution on which was net trained
+            data = np.asarray(image)
+            grayscale_img = rgb2gray(data) # generator receives grayscale image
+            grayscale_img = (grayscale_img - 127.5) / 127.5 # transform to range <-1,1> for
+            grayscale_img = grayscale_img.reshape(1, 64, 64, 1)
 
-        
-    
-    # Initialize variables regarding training continuation 
+
+            predicted_result = self.generator.predict(grayscale_img) # predict with pretrained generator
+            predicted_result = predicted_result * 127.5 + 127.5 # Convert to <0;255> range
+            predicted_result = predicted_result.astype(np.uint8)
+            predicted_result = predicted_result.reshape(64, 64, 3)
+
+            # save colorized result of grayscale input img into results folder
+            plt.imsave("./results/" + file_substr + "_colorized.png", predicted_result)
+
+
+    # Initialize variables regarding training continuation
     def prepare_snapshot_load(self, starting_epoch, weights_path):
         self.starting_epoch = starting_epoch
         self.weights_path = weights_path
@@ -253,23 +263,6 @@ class DeOldify(Model):
 
         # Create Tensorboard callback and set Tensorboard log folder name
         tensorboard_callback = TensorBoard(log_dir=self.logdir, histogram_freq=1, update_freq=self.output_frequency, write_images=True)
-        
-        '''
-        # save whole model during training for each epoch 
-        cp_callback_generator = tf.keras.callbacks.ModelCheckpoint(
-                filepath=self.checkpoint_path_generator, 
-                verbose=1, 
-                save_weights_only=True)
-        
-        cp_callback_generator.set_model(self.generator)
-
-        cp_callback_discriminator = tf.keras.callbacks.ModelCheckpoint(
-                filepath=self.checkpoint_path_discriminator, 
-                verbose=1, 
-                save_weights_only=True)
-        
-        cp_callback_discriminator.set_model(self.discriminator)
-        '''
 
         # Get train and validation batch generators
         train_gen = self.dataset.batch_provider(self.batch_size)
@@ -285,7 +278,7 @@ class DeOldify(Model):
             summary.image("Validation data ground truth examples", plot_to_image(image_grid(val_gt_sample)), max_outputs=EXAMPLE_COUNT)
             summary.image("Validation data black & white examples", plot_to_image(image_grid(val_bw_sample, cmap="gray")), max_outputs=EXAMPLE_COUNT)
         self.file_writer.close()
-        
+
         # Create ResultsGenerator callback, which periodically saves the network outputs
         results_callback = ResultsGenerator(self.generator, self.dataset, self.logdir, tensorboard_callback, self.output_count, self.output_frequency)
 
@@ -293,21 +286,16 @@ class DeOldify(Model):
         epoch_batches = self.dataset.train_count//self.batch_size
 
         snapshot_callback = SnapshotCallback(self.generator, self.discriminator)
-        
+
         # Train the model
-        self.fit(train_gen, batch_size=self.batch_size, 
-                            epochs=self.epochs, 
+        self.fit(train_gen, batch_size=self.batch_size,
+                            epochs=self.epochs,
                             initial_epoch=self.starting_epoch,
-                            callbacks=[results_callback, tensorboard_callback, snapshot_callback], 
+                            callbacks=[results_callback, tensorboard_callback, snapshot_callback],
                             steps_per_epoch=epoch_batches,
                             validation_data=self.dataset.val_data,
                             validation_steps=self.val_batches)
 
-        # save final processed trained model 
-        #self.save(os.path.abspath(os.getcwd()) + "/snapshots/my_model")
-        # save final weights of trained model 
-        #self.generator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/generator_weights.ckpt")
-        #self.discriminator.save_weights(os.path.abspath(os.getcwd()) + "/snapshots/discriminator_weights.ckpt")
 
     def generator_step(self, input_image, training=True):
         # Run generator
@@ -317,13 +305,13 @@ class DeOldify(Model):
 
         # We use VGG to force network to output the same image, but colored,
         # so we take input grayscale images and output image converted to grayscale and measure the loss
-        # Images need to have 3 channels in order to work with VGG, so we stack the single grey channel 
+        # Images need to have 3 channels in order to work with VGG, so we stack the single grey channel
         grayscale_images_vgg = tf.image.grayscale_to_rgb(K.cast(input_image, "float32"))
         generated_images_vgg = tf.image.rgb_to_grayscale(generated_images)
         generated_images_vgg = tf.image.grayscale_to_rgb(generated_images_vgg)
         g_loss_vgg = tf.reduce_mean(perceptual_loss(grayscale_images_vgg, generated_images_vgg))
-        
-        return g_loss_bce, g_loss_vgg 
+
+        return g_loss_bce, g_loss_vgg
 
     # Inspiration: https://keras.io/examples/generative/dcgan_overriding_train_step/
     def train_step(self, data):
@@ -345,7 +333,7 @@ class DeOldify(Model):
 
         # Get new batch of images for generator training
         _, labels, grayscale_images = next(self.dataset.batch_provider(self.batch_size))
-        
+
         # Train generator
         with GradientTape() as tape:
             g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images)
@@ -365,18 +353,18 @@ class DeOldify(Model):
             "g_train_loss_vgg": g_loss_vgg,
             "g_train_loss_bce": g_loss_bce
         }
-    
+
     def test_step(self, data):
         # Get input and labels for networks
         # Since we cant use generator for validation data, we have to convert our data manually
         real_images, labels = data
         real_images = real_images.numpy()
-        
+
         # Create grayscale data
         grayscale_images = convert_all_imgs_to_grayscale(real_images)
-        
+
         # Scale data to <-1;1>
-        real_images = (real_images - 127.5) / 127.5 
+        real_images = (real_images - 127.5) / 127.5
         grayscale_images = (grayscale_images - 127.5) / 127.5
 
         # Convert ground truth to float32 tensor so it's the same type as generator output and can be concatenated to make discriminator input

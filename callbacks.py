@@ -29,7 +29,7 @@ class ResultsGenerator(Callback):
             generated_images_no_gt = self.generator.predict(self.bw_sample_no_gt)
 
             # Convert to <0;255> range
-            generated_images_gt = generated_images_gt * 127.5 + 127.5 
+            generated_images_gt = generated_images_gt * 127.5 + 127.5
             generated_images_no_gt = generated_images_no_gt * 127.5 + 127.5
 
             # Merge arrays together so that new array alternates between real and fake images

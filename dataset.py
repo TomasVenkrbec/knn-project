@@ -42,7 +42,7 @@ class Dataset:
                 batch_samples = np.array(self.x_val[indices], dtype=np.uint8)
                 batch_targets = np.array(self.y_val[indices], dtype=np.uint8)
                 grayscale_images = convert_all_imgs_to_grayscale(self.x_val[indices])
-                        
+
             # Convert images to <-1;1> range from <0;255> range
             if convert_range:
                 batch_samples = (batch_samples - 127.5) / 127.5
@@ -79,7 +79,7 @@ class Dataset:
                 self.x_train = np.append(self.x_train, x_batch_train)
 
             i = i + 1
-            
+
         print("Shape of train data:")
         print(self.x_train.shape)
 
