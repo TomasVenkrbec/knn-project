@@ -77,7 +77,7 @@ if __name__ == "__main__":
     init_args = {}
     args = parse_args()
     for arg in vars(args):
-        if getattr(args, arg) is not None and arg not in ["load_weights", "snapshot_path", "starting_epoch", "images", "dataset"]:
+        if getattr(args, arg) is not None and arg not in ["load_weights", "starting_epoch", "images", "dataset"]:
             init_args[arg] = getattr(args, arg)
 
     model = DeOldify(**init_args)

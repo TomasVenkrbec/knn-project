@@ -40,7 +40,8 @@ class DeOldify(Model):
                 output_count=36,
                 logdir="logs",
                 beta_1=0,
-                beta_2=0.9):
+                beta_2=0.9,
+                snapshot_path="snapshots"):
         super().__init__()
 
         # Training-related settings
@@ -54,6 +55,7 @@ class DeOldify(Model):
         self.output_frequency = output_frequency
         self.output_count = output_count
         self.logdir = logdir + "/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.weights_path = snapshot_path + "/"
 
         # Network-related settings
         self.resolution = resolution # Resolution of train images
@@ -291,10 +293,10 @@ class DeOldify(Model):
     def generator_step(self, input_image, training=True):
         # Run generator
         generated_images = self.generator(input_image, training=training)
-        predictions_gen = self.discriminator(generated_images, training=training)
+        predictions_gen = self.discriminator(generated_images, training=False)
         g_loss_bce = BinaryCrossentropy()(self.labels_real, predictions_gen)
 
-        # We use VGG to force network to output the same image, but colored,
+        # We use VGG to force network to output the same image but colored,
         # so we take input grayscale images and output image converted to grayscale and measure the loss
         # Images need to have 3 channels in order to work with VGG, so we stack the single grey channel
         grayscale_images_vgg = tf.image.grayscale_to_rgb(K.cast(input_image, "float32"))
@@ -310,7 +312,7 @@ class DeOldify(Model):
         real_images, labels, grayscale_images = data
 
         # Generate RGB images from grayscale ground truth
-        generated_images = self.generator(grayscale_images)
+        generated_images = self.generator(grayscale_images, training=False)
 
         # Combine them with real images
         combined_images = tf.concat([generated_images, real_images], axis=0)
@@ -328,7 +330,7 @@ class DeOldify(Model):
         # Train generator
         with GradientTape() as tape:
             g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images)
-            g_loss = g_loss_bce + g_loss_vgg
+            g_loss = g_loss_bce * g_loss_vgg
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.optimizer_gen.apply_gradients(zip(grads, self.generator.trainable_weights))
 
