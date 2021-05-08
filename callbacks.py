@@ -53,11 +53,11 @@ class ResultsGenerator(Callback):
                 summary.image("RGB images from generator", tf_image_no_gt, max_outputs=self.img_count)
 
 class SnapshotCallback(Callback):
-    def __init__(self, generator, discriminator):
+    def __init__(self, generator, discriminator, weights_path):
         self.generator = generator
         self.discriminator = discriminator
-        self.checkpoint_path_generator = "./snapshots/generator_weights.h5"
-        self.checkpoint_path_discriminator = "./snapshots/discriminator_weights.h5"
+        self.checkpoint_path_generator = weights_path + "generator_weights.h5"
+        self.checkpoint_path_discriminator = weights_path + "discriminator_weights.h5"
         
     def on_epoch_end(self, epoch, logs=None):
         self.generator.save_weights(self.checkpoint_path_generator)

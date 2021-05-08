@@ -276,7 +276,7 @@ class DeOldify(Model):
         # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
         epoch_batches = self.dataset.train_count//self.batch_size
 
-        snapshot_callback = SnapshotCallback(self.generator, self.discriminator)
+        snapshot_callback = SnapshotCallback(self.generator, self.discriminator, self.weights_path)
 
         # Train the model
         self.fit(train_gen, batch_size=self.batch_size,
