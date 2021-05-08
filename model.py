@@ -8,8 +8,7 @@ from tensorflow.keras.metrics import Mean, Accuracy
 from tensorflow.keras.callbacks import TensorBoard
 from SpectralNormalization import ConvSN2D
 from SelfAttentionLayer import SelfAttention
-from callbacks import ResultsGenerator
-from snapshot_callback import SnapshotCallback
+from callbacks import ResultsGenerator, SnapshotCallback
 from dataset import Dataset, convert_all_imgs_to_grayscale, rgb2gray
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
@@ -74,12 +73,6 @@ class DeOldify(Model):
         self.labels_fake = np.ones((self.batch_size, 1))
         self.labels_disc = np.concatenate([self.labels_fake, self.labels_real], axis=0)
 
-
-        # path to save model checkpoint during training
-        self.checkpoint_path_generator = "./snapshots/generator_weights.ckpt"
-        self.checkpoint_path_discriminator = "./snapshots/discriminator_weights.ckpt"
-        self.checkpoint_dir = os.path.dirname(self.checkpoint_path_generator)
-
     def compile(self):
         super().compile()
 
@@ -113,9 +106,9 @@ class DeOldify(Model):
         self.optimizer_disc = Adam(lr=self.discriminator_lr, beta_1=self.beta_1, beta_2=self.beta_2)
 
         if (self.load_weights == True):
-          print("LOADING WEIGHTS FROM SNAPSHOT")
-          self.generator.load_weights(self.weights_path + "generator_weights.ckpt")
-          self.discriminator.load_weights(self.weights_path + "discriminator_weights.ckpt")
+          print("Loading weights from snapshot.")
+          self.generator.load_weights(self.weights_path + "generator_weights.h5")
+          self.discriminator.load_weights(self.weights_path + "discriminator_weights.h5")
 
         # Compile discriminator and generator
         self.discriminator.compile(optimizer=self.optimizer_disc, loss=self.loss, metrics=['accuracy'])
@@ -241,7 +234,6 @@ class DeOldify(Model):
             grayscale_img = (grayscale_img - 127.5) / 127.5 # transform to range <-1,1> for
             grayscale_img = grayscale_img.reshape(1, self.resolution, self.resolution, 1)
 
-
             predicted_result = self.generator.predict(grayscale_img) # predict with pretrained generator
             predicted_result = predicted_result * 127.5 + 127.5 # Convert to <0;255> range
             predicted_result = predicted_result.astype(np.uint8)
@@ -249,7 +241,6 @@ class DeOldify(Model):
 
             # save colorized result of grayscale input img into results folder
             plt.imsave("./results/" + file_substr + "_colorized.png", predicted_result)
-
 
     # Initialize variables regarding training continuation
     def prepare_snapshot_load(self, starting_epoch, weights_path):

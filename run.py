@@ -1,9 +1,11 @@
-import tensorflow as tf
 import argparse
 import gc
 import subprocess
 import os
 import sys
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+
+import tensorflow as tf
 from datetime import datetime
 from model import DeOldify
 
@@ -59,7 +61,7 @@ def load_weights(model, args):
     else:
         weights_path = "snapshots/"
 
-    if not (os.path.exists(weights_path) and os.path.isfile(weights_path + "discriminator_weights.ckpt.data-00000-of-00001") and os.path.isfile(weights_path + "generator_weights.ckpt.data-00000-of-00001")):
+    if not (os.path.exists(weights_path) and os.path.isfile(weights_path + "discriminator_weights.h5") and os.path.isfile(weights_path + "generator_weights.h5")):
         print(f"ERROR: Can't find files with saved weights in {'selected' if not args.snapshot_path else 'default snapshot'} folder.")
         sys.exit(1)
 

@@ -3,6 +3,7 @@ from tensorflow import summary
 from utils import plot_to_image, image_grid
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 class ResultsGenerator(Callback):
     def __init__(self, generator, dataset, logdir, tb_callback, img_count=36, output_frequency=50):
@@ -50,3 +51,14 @@ class ResultsGenerator(Callback):
             with self.tb_callback._train_writer.as_default(step=batch):
                 summary.image("RGB images from generator with ground truth", tf_image_gt, max_outputs=self.img_count)
                 summary.image("RGB images from generator", tf_image_no_gt, max_outputs=self.img_count)
+
+class SnapshotCallback(Callback):
+    def __init__(self, generator, discriminator):
+        self.generator = generator
+        self.discriminator = discriminator
+        self.checkpoint_path_generator = "./snapshots/generator_weights.h5"
+        self.checkpoint_path_discriminator = "./snapshots/discriminator_weights.h5"
+        
+    def on_epoch_end(self, epoch, logs=None):
+        self.generator.save_weights(self.checkpoint_path_generator)
+        self.discriminator.save_weights(self.checkpoint_path_discriminator)
