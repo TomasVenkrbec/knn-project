@@ -264,7 +264,7 @@ class DeOldify(Model):
         # Add train and val image sample to Tensorboard
         train_gt_sample, _, train_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, convert_range=False))
         val_gt_sample, _, val_bw_sample = next(self.dataset.batch_provider(EXAMPLE_COUNT, train=False, convert_range=False))
-        self.file_writer = summary.create_file_writer(self.logdir+"/train/plots")
+        self.file_writer = summary.create_file_writer(self.logdir + "/train/plots")
         with self.file_writer.as_default(step=0):
             summary.image("Training data ground truth examples", plot_to_image(image_grid(train_gt_sample)), max_outputs=EXAMPLE_COUNT)
             summary.image("Training data black & white examples", plot_to_image(image_grid(train_bw_sample, cmap="gray")), max_outputs=EXAMPLE_COUNT)
@@ -273,7 +273,7 @@ class DeOldify(Model):
         self.file_writer.close()
 
         # Create ResultsGenerator callback, which periodically saves the network outputs
-        results_callback = ResultsGenerator(self.generator, self.dataset, self.logdir, tensorboard_callback, self.output_count, self.output_frequency)
+        self.results_callback = ResultsGenerator(self.generator, self.dataset, self.logdir, self.output_count, self.output_frequency)
 
         # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
         epoch_batches = self.dataset.train_count//self.batch_size
@@ -284,7 +284,7 @@ class DeOldify(Model):
         self.fit(train_gen, batch_size=self.batch_size,
                             epochs=self.epochs,
                             initial_epoch=self.starting_epoch,
-                            callbacks=[results_callback, tensorboard_callback, snapshot_callback],
+                            callbacks=[self.results_callback, tensorboard_callback, snapshot_callback],
                             steps_per_epoch=epoch_batches,
                             validation_data=self.dataset.val_data,
                             validation_steps=self.val_batches)
@@ -340,6 +340,9 @@ class DeOldify(Model):
         self.g_train_loss_bce_metric.update_state(g_loss_bce)
         self.g_train_loss_vgg_metric.update_state(g_loss_vgg)
 
+        # Update results
+        self.results_callback.do_step()
+
         return {
             "d_train_loss": d_loss,
             "d_train_accuracy": self.d_train_accuracy_metric.result(),
@@ -370,7 +373,7 @@ class DeOldify(Model):
         d_loss = BinaryCrossentropy()(self.labels_disc, predictions_disc)
 
         # Run generator
-        g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images)
+        g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images, training=False)
 
         # Update metrics
         self.d_val_loss_metric.update_state(d_loss)
