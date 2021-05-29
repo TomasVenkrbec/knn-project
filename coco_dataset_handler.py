@@ -27,7 +27,7 @@ def parse_args():
     argParser.add_argument('--dinfo', dest='dataset_info', action='store_true', default=False, help='Prints info about categories and supercategories that are available in the provided COCO dataset. Using this argument, no dataset processing will be performed.')
     argParser.add_argument('--dataset', dest='dataset', action='store', help='COCO dataset folder with subfolders "images" and "annotations".')
     argParser.add_argument('--dtype', dest='dataset_type', action='store', default='train2017', help='Type of COCO dataset that defines source files - ie. "train2017"')
-    argParser.add_argument('--categories', dest='categories', action='store', default='[cat]', help='Choose categories of images that should be selected from the dataset as a list, ie. [cat, person, car]')
+    argParser.add_argument('--categories', dest='categories', action='store', default='[cat]', help='Choose categories (or supercategories, or both) of images that should be selected from the dataset as a list, ie. [cat, person, car]')
     argParser.add_argument('--otype', dest='output_type', action='store', default='print', help='Output form of the COCO dataset images: "print" - prints names of images to stdout, "subfolder" - creates a subfolder containing the selected images in the dataset folder.')
     return argParser.parse_args()
 
@@ -50,11 +50,19 @@ def get_categories(COCO):
     return supercategories, categories
 
 
-def get_filenames_by_cats(categories):
-    catIds = coco.getCatIds(catNms=categories)
+def get_filenames_by_cats(supcat_names=[], cat_names=[]):
+    if supcat_names:
+        supercatIds = coco.getCatIds(supNms=supcat_names)
+    else:
+        supercatIds = []
+    if cat_names:
+        catIds = coco.getCatIds(catNms=cat_names)
+    else:
+        catIds = []
+
 
     imgIds = []
-    for catId in catIds:
+    for catId in list(set(supercatIds + catIds)):
         imgIds.extend(coco.getImgIds(catIds=catId))
     imgIds = list(set(imgIds))
 
@@ -115,8 +123,9 @@ if __name__ == "__main__":
     if args.dataset_info:
         print_info_about_cats(coco)
     else:
+        super_cats, cats = get_categories(coco)
         selected_cats = string_to_list(args.categories)
-        imgNames = get_filenames_by_cats(args.categories)
+        imgNames = get_filenames_by_cats(supcat_names=(intersection(super_cats, selected_cats)), cat_names=(intersection(cats, selected_cats)))
 
         if args.output_type == 'print':
             print(imgNames)

@@ -25,7 +25,7 @@ def parse_args():
     argParser.add_argument('--logdir', dest='logdir', action='store', help='Base folder for outputs.') 
     argParser.add_argument('--output_count', dest='output_count', action='store', type=int, help='Number of images in exported result image.')  
     argParser.add_argument('--epochs', dest='epochs', action='store', type=int, help='Number of epochs to train for.')
-    argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
+    argParser.add_argument('--dataset', dest='dataset', action='store', default="ImageNet", choices=['ImageNet', 'COCO'], help='Select dataset to be used. All dataset files need to be placed directly in \'dataset/##NAME##/\' folder, not in any subfolders.')
     argParser.add_argument('--disc_lr', dest='discriminator_lr', action='store', type=float, help='Learning rate of discriminator network.')
     argParser.add_argument('--gen_lr', dest='generator_lr', action='store', type=float, help='Learning rate of generator network.')
     argParser.add_argument('--beta_1', dest='beta_1', action='store', type=float, help='First order momentum value, hyperparameter of Adam optimizer.') 

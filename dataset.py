@@ -1,6 +1,8 @@
+import os
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 import glob
 import random
 
@@ -51,9 +53,49 @@ class Dataset:
             yield batch_samples, batch_targets, grayscale_images
 
     def get_input_img(self, x):
+        print(x.shape)
         x = np.dstack((x[:, :self.res**2], x[:, self.res**2:2*(self.res**2)], x[:, 2*self.res**2:]))
         x = x.reshape((x.shape[0], self.res, self.res, 3))
+        print(x.shape)
+        print(x[0].shape)
         return x
+
+    def load_coco(self):
+        print("Coco dataset parsing")
+        # process train data
+        train_images = []
+        coco_images_to_train = os.path.abspath(os.getcwd()) + "/dataset/COCO/*"
+
+        # cycle for concatenate all batches from image net together
+        for file in glob.glob(coco_images_to_train):
+            with open(file, 'rb') as fo:
+                # print(fo)
+                image = Image.open(file).convert('RGB')
+                image = image.resize((self.res, self.res))  # resize to resolution on which the net should be trained on
+                image_data = np.array(image)
+
+                if image_data is None or image_data.shape != (self.res, self.res, 3):
+                    continue
+
+                train_images.append(image_data)
+
+        len_val = int(len(train_images) / 10)
+        len_train = int(len(train_images) - len_val)
+
+        self.x_train = np.array(train_images[:len_train])
+        self.x_val = np.array(train_images[len_train:])
+
+        # for now, only zero labels are assigned to each sample
+        self.y_train = np.zeros(self.x_train.shape[0])
+        self.y_val = np.zeros(self.x_val.shape[0])
+
+        print("Shape of train data:")
+        print(self.x_train.shape)
+
+        print("Shape of val data:")
+        print(self.x_val.shape)
+
+        self.check_dataset()
 
     def load_imagenet(self):
         # process train data

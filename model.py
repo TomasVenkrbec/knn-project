@@ -217,6 +217,8 @@ class DeOldify(Model):
         self.dataset = Dataset(self.resolution)
         if dataset_name == "ImageNet":
             self.dataset.load_imagenet()
+        elif dataset_name == "COCO":
+            self.dataset.load_coco()
         else:
             print("ERROR: Selected invalid dataset.")
             sys.exit(1)
