@@ -62,7 +62,7 @@ def load_weights(model, args):
         weights_path = "snapshots/"
 
     if not (os.path.exists(weights_path) and os.path.isfile(weights_path + "discriminator_weights.h5") and os.path.isfile(weights_path + "generator_weights.h5")):
-        print(f"ERROR: Can't find files with saved weights in {'selected' if not args.snapshot_path else 'default snapshot'} folder.")
+        print(f"ERROR: Can't find files with saved weights in {'selected' if args.snapshot_path is not None else 'default snapshot'} folder.")
         sys.exit(1)
 
     # Save weights path and starting epoch in the model
