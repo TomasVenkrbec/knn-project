@@ -1,6 +1,6 @@
 import tensorflow.keras.backend as K
 from tensorflow.keras import Model
-from tensorflow.keras.layers import Input, AveragePooling2D, UpSampling2D, Concatenate, Flatten, Dense, LeakyReLU
+from tensorflow.keras.layers import Input, AveragePooling2D, UpSampling2D, Concatenate, Flatten, Dense, LeakyReLU, Dropout
 from tensorflow.keras.utils import plot_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import BinaryCrossentropy
@@ -12,7 +12,7 @@ from callbacks import ResultsGenerator, SnapshotCallback
 from dataset import Dataset, convert_all_imgs_to_grayscale, rgb2gray
 from tensorflow import GradientTape, math, summary
 from datetime import datetime
-from utils import plot_to_image, image_grid, perceptual_loss
+from utils import plot_to_image, image_grid, PerceptualLoss
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import numpy as np
@@ -34,7 +34,7 @@ class DeOldify(Model):
                 discriminator_lr=0.0004,
                 batch_size=8,
                 attention_res=32,
-                val_batches=100,
+                val_batches=0,
                 epochs=100,
                 output_frequency=50,
                 output_count=36,
@@ -62,7 +62,7 @@ class DeOldify(Model):
         self.filters_gen = filters_gen # Number of convolutional filters in first and last layer of generator
         self.filters_disc = filters_disc # Number of convolutional filters in first layer of discriminator
         self.loss = BinaryCrossentropy()
-        self.loss_gen = perceptual_loss
+        self.loss_gen = PerceptualLoss(resolution)
 
         # Hyperparameters
         self.generator_lr = generator_lr
@@ -182,10 +182,11 @@ class DeOldify(Model):
         rgb_img = Input(shape=(self.resolution, self.resolution, 3)) # RGB image
 
         # Convolutional input block with attention
-        disc = ConvSN2D(self.filters_disc, strides=2, kernel_size=3, kernel_initializer='he_normal', padding="same")(rgb_img)
+        disc = ConvSN2D(self.filters_disc, kernel_size=3, kernel_initializer='he_normal', padding="same")(rgb_img)
         disc = LeakyReLU(0.2)(disc)
         disc = ConvSN2D(self.filters_disc, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
         disc = LeakyReLU(0.2)(disc)
+        disc = Dropout(0.2)(disc)
         if self.attention_res == self.resolution:
             disc = SelfAttention(self.filters_disc)(disc)
 
@@ -196,6 +197,7 @@ class DeOldify(Model):
             disc = LeakyReLU(0.2)(disc)
             disc = ConvSN2D(filters, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
             disc = LeakyReLU(0.2)(disc)
+            disc = Dropout(0.2)(disc)
             if self.attention_res == resolution:
                 disc = SelfAttention(filters)(disc)
 
@@ -205,6 +207,7 @@ class DeOldify(Model):
         # Output block
         disc = ConvSN2D(filters, kernel_size=4, kernel_initializer='he_normal', padding="valid")(disc)
         disc = LeakyReLU(0.2)(disc)
+        disc = Dropout(0.2)(disc)
         disc = Flatten()(disc)
         prob = Dense(1, activation='sigmoid')(disc)
 
@@ -278,12 +281,15 @@ class DeOldify(Model):
         self.results_callback = ResultsGenerator(self.generator, self.dataset, self.logdir, self.output_count, self.output_frequency)
 
         # Batches per epoch (we have to calculate this manually, because batch provider is running infinitety)
-        epoch_batches = self.dataset.train_count//self.batch_size
+        epoch_batches = self.dataset.train_count // self.batch_size
+        if self.val_batches == 0: # Calculate number of val batches if needed
+            self.val_batches = self.dataset.val_count // self.batch_size
 
         snapshot_callback = SnapshotCallback(self.generator, self.discriminator, self.weights_path)
 
         # Train the model
         self.fit(train_gen, batch_size=self.batch_size,
+                            validation_batch_size=self.batch_size,
                             epochs=self.epochs,
                             initial_epoch=self.starting_epoch,
                             callbacks=[self.results_callback, tensorboard_callback, snapshot_callback],
@@ -304,7 +310,7 @@ class DeOldify(Model):
         grayscale_images_vgg = tf.image.grayscale_to_rgb(K.cast(input_image, "float32"))
         generated_images_vgg = tf.image.rgb_to_grayscale(generated_images)
         generated_images_vgg = tf.image.grayscale_to_rgb(generated_images_vgg)
-        g_loss_vgg = tf.reduce_mean(perceptual_loss(grayscale_images_vgg, generated_images_vgg))
+        g_loss_vgg = tf.reduce_mean(self.loss_gen.perceptual_loss(grayscale_images_vgg, generated_images_vgg))
 
         return g_loss_bce, g_loss_vgg
 
@@ -332,7 +338,7 @@ class DeOldify(Model):
         # Train generator
         with GradientTape() as tape:
             g_loss_bce, g_loss_vgg = self.generator_step(grayscale_images)
-            g_loss = g_loss_bce * g_loss_vgg
+            g_loss = g_loss_bce + g_loss_vgg * 0.0001
         grads = tape.gradient(g_loss, self.generator.trainable_weights)
         self.optimizer_gen.apply_gradients(zip(grads, self.generator.trainable_weights))
 
@@ -379,7 +385,7 @@ class DeOldify(Model):
 
         # Update metrics
         self.d_val_loss_metric.update_state(d_loss)
-        self.d_val_accuracy_metric.update_state(self.labels_disc, predictions_disc)
+        self.d_val_accuracy_metric.update_state(np.around(self.labels_disc), math.round(predictions_disc))
         self.g_val_loss_bce_metric.update_state(g_loss_bce)
         self.g_val_loss_vgg_metric.update_state(g_loss_vgg)
 

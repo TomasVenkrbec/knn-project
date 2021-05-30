@@ -79,7 +79,6 @@ def create_subfolder(dataset_dir, selected_cats):
     name = 'COCO'
     for cat in selected_cats:
         name += '_' + str(cat)
-    name += '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     mydir = os.path.join(dataset_dir, name)
     os.makedirs(mydir)
     return mydir

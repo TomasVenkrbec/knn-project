@@ -31,7 +31,6 @@ class Dataset:
         self.x_val = None
         self.y_val = None
 
-    # Note: We could possibly try to add labels later, that probably would make network work better
     def batch_provider(self, batch_size, train=True, convert_range=True):
         while True:
             if train:
