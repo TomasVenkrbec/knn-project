@@ -52,10 +52,11 @@
     
     \section{Dataset}
     
-    \subsection{ImageNet}
-    ImageNet\footnote{\url{https://www.image-net.org/about.php}} je datovou sadou čítající přes milion a čtvrt snímků zařazených do 1000 kategorií. Jedná se o jednu z nejznámějších datových sad využívanou zejména v úlohách strojového učení. Veliká rozličnost snímků mnoha různých objektů přináší ovšem jistou nevýhodu při trénování námi implementovaného modelu, protože trénování probíhá déle a nedosahuje tak kvalitních výsledků, než kdyby se využívalo pouze určité podkategorie snímků (např. snímky přírody nebo obličejů). Pro trénování byla využita verze datasetu se snímky rozměrů 64 $\times$ 64 pixelů.
+    \subsection{ImageNet}\label{section:ImageNet}
+    ImageNet\footnote{\url{https://www.image-net.org/about.php}} je datovou sadou čítající přes milion a čtvrt snímků zařazených do 1000 kategorií \cite{ImageNetStats}. Jedná se o jednu z nejznámějších datových sad využívanou zejména v úlohách strojového učení. Veliká rozličnost snímků mnoha různých objektů přináší ovšem jistou nevýhodu při trénování námi implementovaného modelu, protože trénování probíhá déle a nedosahuje tak kvalitních výsledků, než kdyby se využívalo pouze určité podkategorie snímků (např. snímky přírody nebo obličejů). Pro trénování byla využita verze datasetu se snímky rozměrů 64 $\times$ 64 pixelů.
     
     \subsection{COCO dataset}
+    Ve své práci jsme se rozhodli provést experimenty i s dalším datasetem. Jedná se o COCO dataset\footnote{\url{https://cocodataset.org/##home}}, který obsahuje více jak 328 tisíc snímků zařazených do 91 objektových kategorií \cite{lin2015microsoft}. Každý objekt je poté i zařazen do nadtřídy -- např. objekty \textit{bicycle}, \textit{car}, \textit{motorcycle}, \textit{airplane}, \textit{bus}, \textit{train}, \textit{truck} nebo \textit{boat} jsou zařazeny do nadřídy \textit{vehicle} \cite{CocoCategories}. COCO dataset jsme se rozhodli využít zvláště z důvodu snadné možnosti vybrání pouze několika kategorií obrázků, protože dataset ImageNet je příliš rozsáhlým a obsahuje obrovské množství rozličných objektů. Při trénování jsme využili jak rozlišení 64 $\times$ 64, tak i vyššího rozlišení 128 $\times$ 128 pixelů.
     
     \section{Řešení}
     Kromě skriptů obsahující implementace \textit{self-attention}\footnote{\url{https://github.com/kiyohiro8/SelfAttentionGAN}} vrstvy a \textit{spektrální normalizace}\footnote{\url{https://github.com/IShengFang/SpectralNormalizationKeras}} je celá implementace řešení již pouze naší prací, nepřejímáme žádné již existující řešení. 
@@ -68,7 +69,7 @@
     
     Ke konverzi vlastních snímků je třeba spustit skript s argumentem \texttt{--images}, k pokračování dřívějšího trénování slouží argument \texttt{--load\_weights} a základní chování bez použití argumentů je trénování modelu od počátku. Rovněž nastavitelné jsou veškeré cesty k vstupům a výstupům a většina parametrů nastavení sítě a trénování. Popis všech argumentů lze najít použitím argumentu \texttt{--help}.
     
-    \subsection{Generativní neuronové sítě}
+    \subsection{Model}
     Naše řešení, stejně jako DeOldify, kterým jsme byli inspirováni, používá Self-Attention GAN \cite{sagan}, zkráceně SAGAN.
     
     \subsubsection{Diskriminátor}
@@ -103,6 +104,15 @@
     Pro lepší kontrolu nad procesem trénování a vyhodnocování jsme předefinovali funkce \texttt{train\_step} a \texttt{test\_step}, kterými knihovna \textit{Keras} vykonává jednotlivé kroky trénování a validace ve funkci \texttt{fit}. Díky tomu jsme mohli ručně počítat hodnoty chybových funkcí a aktualizovat váhy obou sítí. Také jsme snadněji mohli přidat vlastní callbacky k průběžnému ukládání vah modelu, vygenerovaných obrázků a všech trénovacích metrik do \textit{Tensorboard}.
     
     \section{Výsledky}
+    Při trénování modelu jsme využili 3 přístupy. Nejprve byl model natrénovaný pouze na datasetu ImageNet (viz Sekce \ref{section:ImageNet}). Rozsáhlost datasetu však přinesla několik problémů, kdy trénování trvalo delší dobu a přesto nedosahovalo dobrých výsledků. Zdá se, že model má při velmi rozličných snímcích problém s velkou variancí a neví jaké rysy se přesně naučit. Proto jsme se rozhodli otestovat výsledky modelu, pokud po natrénování modelu na ImageNetu dotrénujeme tento model na specifičtější části COCO datasetu.
+    
+    \subsection{ImageNet}\label{results:imagenet}
+    
+    \subsection{COCO dataset}\label{results:coco}
+    
+    \subsection{Kombinované trénování}\label{results:combine}
+    
+    
     
     \section{Závěr}
     
