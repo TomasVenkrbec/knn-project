@@ -179,9 +179,11 @@ class DeOldify(Model):
         # Create the generator model
         generator_model = Model(inputs=grayscale_img, outputs=output_gen)
         
-        font = ImageFont.truetype("../ARIAL.TTF", 18)
-        visualkeras.layered_view(generator_model, to_file="generator2.png", scale_xy=1.5, legend=True, font=font, spacing=5)
-        visualkeras.layered_view(generator_model, to_file="generator.png", legend=True, spacing=5)
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 18)
+            visualkeras.layered_view(generator_model, to_file="generator.png", scale_xy=1.5, legend=True, font=font, spacing=5)
+        except:
+            print("Default linux font not detected, not creating discriminator view!")
         return generator_model
 
     def create_discriminator(self):
@@ -220,9 +222,11 @@ class DeOldify(Model):
         # Build the discriminator model
         discriminator_model = Model(inputs=rgb_img, outputs=prob)
         
-        font = ImageFont.truetype("../ARIAL.TTF", 18)
-        visualkeras.layered_view(discriminator_model, to_file="discriminator2.png", scale_xy=1.5, legend=True, font=font, spacing=5)
-        visualkeras.layered_view(discriminator_model, to_file="discriminator.png", legend=True, spacing=5)
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 18)
+            visualkeras.layered_view(discriminator_model, to_file="discriminator.png", scale_xy=1.5, legend=True, font=font, spacing=5)
+        except:
+            print("Default linux font not detected, not creating discriminator view!")
         return discriminator_model
 
     # ImageNet (http://image-net.org/)
