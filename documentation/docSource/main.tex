@@ -48,18 +48,18 @@
     Zadáním projektu bylo vytvoření modelu schopného provádět automatické obarvování obrazu. Tím rozumíme úlohu přidání barev do šedotónového obrazu bez nutných zásahů uživatele. Tato úloha je ze své podstaty obecně nejednoznačná a konkrétní výstup tak záleží na dodatečných informacích, kontextu či vzorových datech. Naším cílem bylo vyvinout model využívající generativních neuronových sítí (GAN), který dokáže obarvit snímky s rozličnými typy objektů, jak snímky z námi zvoleného datasetu, tak snímky nahrané uživatelem. 
     
     \section{Analýza existujícího řešení -- DeOldify}
-    DeOldify \cite{deoldify} je open-source model hlubokého učení, jehož první verzi implementoval Jason Antic již mezi lety 2018 a 2019. Cílem bylo vytvoření modelu pro obarvování historických šedotónových snímků. Model vychází převážně z modelu SAGAN, který oproti vanilla verzi GAN dokáže při trénování zahrnout kontext z celé plochy obrázku, nikoliv pouze z lokálního okolí. Zároveň je model inspirovaný principem modelu Progressive Growing GAN, který umožňuje dosáhnout vyššího rozlišení snímků. Generátor využívá architekturu sítě U-Net, která byla původně vyvinuta pro segmentaci biomedicínských dat, ale lze jí  využít i pro tento účel. V dnešní době se DeOldify více zaměřuje na obarvování videa, námi implementovaný model se inspiroval starší verzí\footnote{\url{https://github.com/dana-kelley/DeOldify}}, která pracovala pouze s obarvováním šedotónových fotografií.
+    DeOldify \cite{deoldify} je open-source model hlubokého učení, jehož první verzi implementoval Jason Antic již mezi lety 2018 a 2019. Cílem bylo vytvoření modelu pro obarvování historických šedotónových snímků. Model vychází převážně z modelu SAGAN, který oproti vanilla verzi GAN dokáže při trénování zahrnout kontext z celé plochy obrázku, nikoliv pouze z lokálního okolí. Zároveň je model inspirovaný principem modelu Progressive Growing GAN, který umožňuje dosáhnout vyššího rozlišení snímků. Generátor využívá architekturu sítě U-Net, která byla původně vyvinuta pro segmentaci biomedicínských dat, ale lze jí  využít i pro tento účel. V~dnešní době se DeOldify více zaměřuje na obarvování videa, námi implementovaný model se inspiroval starší verzí\footnote{\url{https://github.com/dana-kelley/DeOldify}}, která pracovala pouze s obarvováním šedotónových fotografií.
     
     \section{Dataset}
     
     \subsection{ImageNet}\label{section:ImageNet}
-    ImageNet\footnote{\url{https://www.image-net.org/about.php}} je datovou sadou čítající přes milion a čtvrt snímků zařazených do 1000 kategorií \cite{ImageNetStats}. Jedná se o jednu z nejznámějších datových sad využívanou zejména v úlohách strojového učení. Veliká rozličnost snímků mnoha různých objektů přináší ovšem jistou nevýhodu při trénování námi implementovaného modelu, protože trénování probíhá déle a nedosahuje tak kvalitních výsledků, než kdyby se využívalo pouze určité podkategorie snímků (např. snímky přírody nebo obličejů). Pro trénování byla využita verze datasetu se snímky rozměrů 64 $\times$ 64 pixelů.
+    ImageNet\footnote{\url{https://www.image-net.org/about.php}} je datovou sadou čítající přes 1,25 milionu snímků zařazených do 1000 kategorií \cite{ImageNetStats}. Jedná se o jednu z nejznámějších datových sad využívanou zejména v úlohách strojového učení. Veliká rozličnost snímků mnoha různých objektů přináší ovšem jistou nevýhodu při trénování námi implementovaného modelu, protože trénování probíhá déle a nedosahuje tak kvalitních výsledků, než kdyby se využívalo pouze určité podkategorie snímků (např. snímky přírody nebo obličejů). Pro trénování byla využita verze datasetu se snímky rozměrů 64 $\times$ 64 pixelů.
     
     \subsection{COCO dataset}
-    Ve své práci jsme se rozhodli provést experimenty i s dalším datasetem. Jedná se o COCO dataset\footnote{\url{https://cocodataset.org/##home}}, který obsahuje více jak 328 tisíc snímků zařazených do 91 objektových kategorií \cite{lin2015microsoft}. Každý objekt je poté i zařazen do nadtřídy -- např. objekty \textit{bicycle}, \textit{car}, \textit{motorcycle}, \textit{airplane}, \textit{bus}, \textit{train}, \textit{truck} nebo \textit{boat} jsou zařazeny do nadřídy \textit{vehicle} \cite{CocoCategories}. COCO dataset jsme se rozhodli využít zvláště z důvodu snadné možnosti vybrání pouze několika kategorií obrázků, protože dataset ImageNet je příliš rozsáhlým a obsahuje obrovské množství rozličných objektů. Při trénování jsme využili jak rozlišení 64 $\times$ 64, tak i vyššího rozlišení 128 $\times$ 128 pixelů.
+    Ve své práci jsme se rozhodli provést experimenty i s dalším datasetem. Jedná se o COCO dataset\footnote{\url{https://cocodataset.org/##home}}, který obsahuje více jak 328 tisíc snímků zařazených do 91 objektových kategorií~\cite{lin2015microsoft}. Každý objekt je poté i zařazen do superkategorie -- např. objekty kategorií \textit{bicycle}, \textit{car}, \textit{motorcycle}, \textit{airplane}, \textit{bus}, \textit{train}, \textit{truck} nebo \textit{boat} jsou zařazeny do superkategorie \textit{vehicle} \cite{CocoCategories}. COCO dataset jsme se rozhodli využít zvláště z důvodu snadné možnosti vybrání pouze několika kategorií obrázků, protože dataset ImageNet je příliš rozsáhlým a obsahuje obrovské množství rozličných objektů. Při trénování jsme využili jak rozlišení 64 $\times$ 64, tak i vyššího rozlišení 128~$\times$~128 pixelů.
     
     \section{Řešení}
-    Kromě skriptů obsahující implementace \textit{self-attention}\footnote{\url{https://github.com/kiyohiro8/SelfAttentionGAN}} vrstvy a \textit{spektrální normalizace}\footnote{\url{https://github.com/IShengFang/SpectralNormalizationKeras}} je celá implementace řešení již pouze naší prací, nepřejímáme žádné již existující řešení. 
+    Kromě skriptů obsahující implementace \textit{self-attention}\footnote{\url{https://github.com/kiyohiro8/SelfAttentionGAN}} vrstvy a \textit{spektrální normalizace}\footnote{\url{https://github.com/IShengFang/SpectralNormalizationKeras}} je celá implementace řešení již pouze naší prací, nepřejímáme žádné již existující řešení. Námi řešený projekt je dostupný ve veřejném repozitáři na serveru \textit{GitHub}\footnote{\url{https://github.com/TomasVenkrbec/knn-project}}.
     
     \subsection{Implementační detaily}
     Projekt byl implementován v jazyce Python, k implementaci modelů neuronových sítí byla využita knihovna \textit{Tensorflow}, přesněji její rozhraní \textit{Keras}. Ke zjednodušení procesu evaluace byl k vizualizaci všech relevantních trénovacích metrik využit nástroj \textit{Tensorboard}.
@@ -70,7 +70,7 @@
     Ke konverzi vlastních snímků je třeba spustit skript s argumentem \texttt{--images}, k pokračování dřívějšího trénování slouží argument \texttt{--load\_weights} a základní chování bez použití argumentů je trénování modelu od počátku. Rovněž nastavitelné jsou veškeré cesty k vstupům a výstupům a většina parametrů nastavení sítě a trénování. Popis všech argumentů lze najít použitím argumentu \texttt{--help}.
     
     \subsection{Model}
-    Naše řešení, stejně jako DeOldify, kterým jsme byli inspirováni, používá Self-Attention GAN \cite{sagan}, zkráceně SAGAN.
+    Naše řešení, stejně jako DeOldify, kterým jsme byli inspirováni, používá Self-Attention GAN~\cite{sagan}, zkráceně SAGAN.
     
     \subsubsection{Diskriminátor}
     Diskriminátor je z dvojice sítí tou jednodušší, jedná se o klasickou konvoluční neuronovou síť využívající architekturu VGG. V každém konvolučním bloku, sestávajícím se z dvou konvolučních vrstev, využíváme za každou konvoluční vrstvou spektrální normalizaci a aktivační funkci \textit{LeakyReLU}. Self-attention blok přidáváme pouze jednou do celé sítě, a to na konec bloku s rozlišením 32 $\times$ 32. Použití právě při tomto rozlišení je podle autorů této techniky nejefektivnější \cite{sagan}. Diskriminátor je trénován tradičně pomocí optimalizátoru \textit{Adam} s koeficientem učení $0.0004$. Vstupem této sítě jsou tedy barevné obrázky a výstupem je pravděpodobnost, zda se jedná o skutečný či falešný obrázek.
@@ -94,27 +94,70 @@
     \subsubsection{Chybové funkce}
     Diskriminátor se učí rozpoznávat původ obrázků -- zda pochází z datové sady, nebo jsou výstupy generátoru. U vstupních obrázků tyto informace vždy máme, tudíž můžeme jako chybovou funkci využít \textit{Binary Cross Entropy} mezi labely vstupných dat a labely, které byly na výstupu diskriminátoru.
     
-    Generátor využívá dvojici chybových funkcí. Za prvé, jelikož používáme generativní neuronové sítě a máme diskriminátor, máme chybovou funkci \textit{Adversarial Loss}. Generátor se učí tím, že se snaží co nejvíce zvýšit hodnotu chybové funkce diskriminátoru. Toto motivuje generátor k tomu, aby co nejlépe obarvoval snímky, které má na vstupu.
+    Generátor využívá dvojici chybových funkcí. Za prvé, jelikož používáme generativní neuronové sítě a máme diskriminátor, máme chybovou funkci \textit{Adversarial Loss}. Generátor se učí tím, že se snaží co nejvíce zvýšit hodnotu chybové funkce diskriminátoru. Toto motivuje generátor k~tomu, aby co nejlépe obarvoval snímky, které má na vstupu.
     Aby obarvené snímky odpovídaly obsahem těm, které jsou na vstupu, využíváme \textit{Perceptual Loss} (též známý jako \textit{Feature Loss} nebo \textit{VGG Loss}), který porovnává hodnoty aktivací ve vybraných vrstvách předtrénované VGG sítě, když je jí na vstup dán vstupní a výstupní obrázek generátoru.
     Kombinace těchto chybových funkcí motivuje generátor k tomu, aby neměnil obsah vstupního obrázku, ale pouze ho obarvil.
     
     \subsubsection{Trénování a vyhodnocování}
-    Trénování probíhalo v prostředí \textit{Google Colab}, který jsme vzhledem k velikosti modelu a z ní vycházející náročnosti trénování byli nuceni použít. Trénování bylo tedy omezeno po dobu, po kterou jsou dostupné zdarma grafické karty, což se odráží na finálních výsledcích. 
+    Trénování probíhalo v prostředí \textit{Google Colab}, který jsme vzhledem k velikosti modelu a z ní vycházející náročnosti trénování byli nuceni použít. Trénování bylo tedy omezeno po dobu, po~kterou jsou dostupné zdarma grafické karty, což se odráží na finálních výsledcích. 
     
     Pro lepší kontrolu nad procesem trénování a vyhodnocování jsme předefinovali funkce \texttt{train\_step} a \texttt{test\_step}, kterými knihovna \textit{Keras} vykonává jednotlivé kroky trénování a validace ve funkci \texttt{fit}. Díky tomu jsme mohli ručně počítat hodnoty chybových funkcí a aktualizovat váhy obou sítí. Také jsme snadněji mohli přidat vlastní callbacky k průběžnému ukládání vah modelu, vygenerovaných obrázků a všech trénovacích metrik do \textit{Tensorboard}.
     
     \section{Výsledky}
-    Při trénování modelu jsme využili 3 přístupy. Nejprve byl model natrénovaný pouze na datasetu ImageNet (viz Sekce \ref{section:ImageNet}). Rozsáhlost datasetu však přinesla několik problémů, kdy trénování trvalo delší dobu a přesto nedosahovalo dobrých výsledků. Zdá se, že model má při velmi rozličných snímcích problém s velkou variancí a neví jaké rysy se přesně naučit. Proto jsme se rozhodli otestovat výsledky modelu, pokud po natrénování modelu na ImageNetu dotrénujeme tento model na specifičtější části COCO datasetu.
+    Při trénování modelu jsme využili tři přístupy. Nejprve byl model natrénovaný pouze na datasetu ImageNet (viz Sekce \ref{section:ImageNet}). Rozsáhlost datasetu však přinesla několik problémů, kdy trénování trvalo delší dobu, a přesto nedosahovalo dobrých výsledků. Zdá se, že model má při velmi rozličných snímcích problém s velkou variancí a neví, jaké rysy se přesně naučit. Proto jsme se rozhodli otestovat výsledky modelu, pokud po natrénování modelu na ImageNetu dotrénujeme tento model na specifičtější části COCO datasetu. Tento postup však ukázal, že v takovém případě má model tendenci aplikovat barevný odstín pouze na relativně velké plochy. Například jsou pak tedy plochy jako podlaha či stěna relativně dobře obarvené, ale model ignoruje další -- menší -- objekty na snímku.
     
     \subsection{ImageNet}\label{results:imagenet}
+    Výstupy modelu natrénovaného na snímcích z datasetu ImageNet po 100 epochách jsou ukázány na Obrázku \ref{fig:res_imagenet}.
+    
+    \begin{figure}[ht]
+        \centering
+        \resizebox{64px}{64px}{\includegraphics{samples/imagenet/image1.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image1_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image3.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image3_colorized.png}}\\\vspace{4pt}
+        \resizebox{64px}{64px}{\includegraphics{samples/imagenet/image4.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image4_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image5.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image5_colorized.png}}\\\vspace{4pt}
+        \resizebox{64px}{64px}{\includegraphics{samples/imagenet/image6.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image6_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image7.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/imagenet/image7_colorized.png}}
+        
+        \caption{Příklady výstupů modelu natrénovaného na ImageNet datasetu.}
+        \label{fig:res_imagenet}
+    \end{figure}
     
     \subsection{COCO dataset}\label{results:coco}
+    Narozdíl od ostatních přístupů byl model na COCO datasetu natrénovaný se snímky v rozlišení 128 $\times$ 128 pixelů. Obrázek \ref{fig:res_coco} níže ukazuje, že model produkuje obstojné výsledky zejména v případě snímků z přírody.
+    
+    \begin{figure}[ht]
+        \centering
+        \resizebox{64px}{64px}{\includegraphics{samples/coco/image_cat1.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_cat1_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_cat2.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_cat2_colorized.png}}\\\vspace{4pt}
+        \resizebox{64px}{64px}{\includegraphics{samples/coco/image_nature1.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_nature1_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_nature2.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_nature2_colorized.png}}\\\vspace{4pt}
+        \resizebox{64px}{64px}{\includegraphics{samples/coco/image_person1.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_person1_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_person2.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/coco/image_person2_colorized.png}}
+        
+        \caption{Příklady výstupů modelu natrénovaného na COCO datasetu.}
+        \label{fig:res_coco}
+    \end{figure}
     
     \subsection{Kombinované trénování}\label{results:combine}
+    Využití tohoto přístupu bohužel nepřineslo plánované výsledky. Model se v tomto případě soustředí na velké plochy, které následně obarví jedním barevným odstínem, jak jde vidět níže na obrázku \ref{fig:res_combine}.
     
+    \begin{figure}[ht!]
+        \centering
+        \resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_1.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_1_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_2.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_2_colorized.png}}\\\vspace{4pt}
+        \resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_3.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_3_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_4.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_4_colorized.png}}\\\vspace{4pt}
+        \resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_5.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_5_colorized.png}}\hspace{4pt}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_6.jpg}}\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_6_colorized.png}}
+        
+        \caption{Příklady výstupů modelu natrénovaného na ImageNetu s následným dotrénováním na obrázcích koček z COCO datasetu. Vstupem modelu byly zcela neznámá data nalezená na internetu.}
+        \label{fig:res_combine}
+    \end{figure}
     
+    % Museli bychom dat az do priloh, moc velky obrazek
+    % \begin{figure}[ht]
+    %     \centering
+    %     %\resizebox{64px}{64px}{\includegraphics{samples/combine/image_cat_1.jpg}}
+    %     \scalebox{0.9}{\includegraphics{samples/combine/val_data.PNG}}
+        
+    %     \caption{Příklady výstupů modelu natrénovaného na ImageNetu s následným dotrénováním na obrázcích koček z COCO datasetu. Jedná se data z validační sady získaná během poslední trénovací epochy.}
+    %     \label{fig:res_combine}
+    % \end{figure}
     
     \section{Závěr}
+    
+    Model ukázal, že je schopný nalézt dominantní odstín v obraze a ten dále aplikovat. Bohužel však nebyl schopný naučit se tuto úlohu řešit na úrovni jednotlivých objektů. V případě datasetu ImageNet byl pro model zřejmě příliš komplexní a model nebyl schopný naučit se produkovat kvalitní výsledky. Při použití datasetu COCO se model snaží obarvovat přesnější lokality, ale stále na celou takovou oblast aplikuje jediný barevný odstín. Jako možné vylepšení modelu pro zlepšení kvality výsledků by stálo za zvážení přidání dodatečné informace pro trénování, například na základě dominantních barev v obraze.
     
     \newpage
     \bibliographystyle{czplain}

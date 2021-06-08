@@ -20,6 +20,8 @@ import sys
 import os
 from PIL import Image
 import glob
+import visualkeras
+from PIL import ImageFont
 import matplotlib.pyplot as plt
 
 GENERATOR_MIN_RESOLUTION = 8 # Resolution in "deepest" layer of generator U-net
@@ -28,8 +30,8 @@ EXAMPLE_COUNT = 25 # Number of example images in Tensorboard
 class DeOldify(Model):
     def __init__(self,
                 resolution=64,
-                filters_gen=32,
-                filters_disc=16,
+                filters_gen=16,
+                filters_disc=8,
                 generator_lr=0.0001,
                 discriminator_lr=0.0004,
                 batch_size=8,
@@ -176,6 +178,10 @@ class DeOldify(Model):
 
         # Create the generator model
         generator_model = Model(inputs=grayscale_img, outputs=output_gen)
+        
+        font = ImageFont.truetype("../ARIAL.TTF", 18)
+        visualkeras.layered_view(generator_model, to_file="generator2.png", scale_xy=1.5, legend=True, font=font, spacing=5)
+        visualkeras.layered_view(generator_model, to_file="generator.png", legend=True, spacing=5)
         return generator_model
 
     def create_discriminator(self):
@@ -192,7 +198,7 @@ class DeOldify(Model):
 
         resolution = self.resolution // 2
         filters = self.filters_disc * 2
-        while resolution > 4:
+        while resolution >= 4:
             disc = ConvSN2D(filters, strides=2, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
             disc = LeakyReLU(0.2)(disc)
             disc = ConvSN2D(filters, kernel_size=3, kernel_initializer='he_normal', padding="same")(disc)
@@ -205,7 +211,7 @@ class DeOldify(Model):
             filters *= 2 # Twice the filters
 
         # Output block
-        disc = ConvSN2D(filters, kernel_size=4, kernel_initializer='he_normal', padding="valid")(disc)
+        disc = ConvSN2D(filters // 4, kernel_size=4, kernel_initializer='he_normal', padding="valid")(disc)
         disc = LeakyReLU(0.2)(disc)
         disc = Dropout(0.2)(disc)
         disc = Flatten()(disc)
@@ -213,6 +219,10 @@ class DeOldify(Model):
 
         # Build the discriminator model
         discriminator_model = Model(inputs=rgb_img, outputs=prob)
+        
+        font = ImageFont.truetype("../ARIAL.TTF", 18)
+        visualkeras.layered_view(discriminator_model, to_file="discriminator2.png", scale_xy=1.5, legend=True, font=font, spacing=5)
+        visualkeras.layered_view(discriminator_model, to_file="discriminator.png", legend=True, spacing=5)
         return discriminator_model
 
     # ImageNet (http://image-net.org/)

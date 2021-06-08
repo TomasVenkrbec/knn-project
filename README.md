@@ -22,5 +22,6 @@ Examples of colorized images are shown in `results` folder.
  - Python 3.8.5
  - Tensorflow 2.4.1
  - [ImageNet](http://image-net.org/) dataset (preferably downscaled 64x64 version)
+ - [COCO](https://cocodataset.org/#download) dataset
 
 ![Swish swoosh](swish.jpg "Swish swoosh")
